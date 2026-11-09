@@ -20,11 +20,13 @@ logger = logging.getLogger("Puncher")
 
 
 def process_job(data):
-    numbers = data.get("numbers", [])
+    recipients = data.get("recipients") or [
+        {"mobile": number, "variables": {}} for number in data.get("numbers", [])
+    ]
     campaign_id_text = data.get("campaign_id")
     user_id_text = data.get("user_id")
 
-    if not numbers or not campaign_id_text:
+    if not recipients or not campaign_id_text:
         return
 
     campaign_id = ObjectId(campaign_id_text)
@@ -69,8 +71,8 @@ def process_job(data):
 
         now = datetime.now(IST)
         docs = []
-        for number in numbers:
-            mobile = str(number).strip()
+        for recipient in recipients:
+            mobile = str(recipient.get("mobile", "")).strip()
             if not mobile:
                 continue
 
@@ -86,6 +88,7 @@ def process_job(data):
                     "campaign_id": campaign_id,
                     "user_id": user_id,
                     "mobile": mobile,
+                    "variables": recipient.get("variables", {}),
                     "status": "queued",
                     "is_fake": is_fake,
                     "is_whitelisted": is_whitelisted,

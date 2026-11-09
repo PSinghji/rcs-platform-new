@@ -53,7 +53,8 @@
 
                 <div id="plainBox" class="d-none mb-4 animate__animated animate__fadeIn">
                     <label class="small fw-bold">Message Content *</label>
-                    <textarea id="plain_text" class="form-control mb-1" rows="4" maxlength="2000" placeholder="Enter message text..." oninput="handleTextInput(this, 2000)"></textarea>
+                    <textarea id="plain_text" class="form-control mb-1" rows="4" maxlength="2000" placeholder="Simple: Hello customer. Dynamic: Hello {% raw %}{{name}}{% endraw %}, your code is {% raw %}{{coupon_code}}{% endraw %}" oninput="handleTextInput(this, 2000)"></textarea>
+                    <div class="form-text">Optional dynamic fields use <code>{% raw %}{{variable_name}}{% endraw %}</code>. Use lowercase letters, numbers and underscores.</div>
                     <div style="height: 15px;"> <span class="char-counter" id="plain_text_count">0/2000</span>
                     </div>
                     <div id="plainActions" class="mt-2"></div>
@@ -510,6 +511,14 @@ async function submitTemplate() {
         template_type: document.getElementById("templateType").value,
         content: buildPayload()
     };
+
+    const serialized = JSON.stringify(payload.content);
+    const malformed = serialized.match(/\{\{(?!\s*[A-Za-z][A-Za-z0-9_]*\s*\}\})/);
+    if (malformed) {
+        btn.disabled = false;
+        btn.innerHTML = 'SAVE TEMPLATE';
+        return Swal.fire('Invalid Variable', 'Use placeholders like {% raw %}{{name}}{% endraw %} or {% raw %}{{coupon_code}}{% endraw %}.', 'error');
+    }
 
     try {
         const res = await fetch("/ui/templates/create", {

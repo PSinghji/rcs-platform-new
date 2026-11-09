@@ -4,6 +4,7 @@ from app.dependencies_ui import get_current_user_ui
 from datetime import datetime
 from bson import ObjectId
 import pytz
+from app.utils.template_variables import extract_template_variables
 # Define IST timezone
 IST = pytz.timezone('Asia/Kolkata')
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -27,12 +28,14 @@ def create_template(payload: dict, user=Depends(get_current_user_ui)):
     if template_type not in ["plain", "rich", "carousel"]:
         raise HTTPException(400, "Invalid template type")
 
-    # Minimal Jio structure validation
+    # Minimal Jio structure validation. UI stores the provider content object
+    # directly; API clients may also send the full data.content wrapper.
     if template_type in ["rich", "carousel"]:
-        try:
-            _ = content["data"]["content"]["richCardDetails"]
-        except Exception:
+        provider_content = content.get("data", {}).get("content", content)
+        if not isinstance(provider_content, dict) or "richCardDetails" not in provider_content:
             raise HTTPException(400, "Invalid Jio RCS structure")
+
+    variables = extract_template_variables(content)
 
     doc = {
         "name": name,
@@ -40,6 +43,8 @@ def create_template(payload: dict, user=Depends(get_current_user_ui)):
 
         # STORED AS-IS (Jio compliant)
         "content": content,
+        "message_mode": "dynamic" if variables else "simple",
+        "variables": variables,
 
         # Ownership
         "owner_id": ObjectId(user["_id"]),

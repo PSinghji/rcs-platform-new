@@ -9,3 +9,7 @@ requests
 jinja2
 python-multipart
 openpyxl==3.1.5
+pandas
+pytz
+cryptography
+email-validator

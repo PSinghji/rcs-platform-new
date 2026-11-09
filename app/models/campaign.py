@@ -21,7 +21,9 @@ def campaign_document(
     cutting_percent=0.0,
     cutting_threshold=100,
     
-    created_by=None
+    created_by=None,
+    message_mode="simple",
+    template_variables=None,
 ):
    # Calculate IST time once
     now_ist = datetime.now(IST).replace(tzinfo=None) # 🔥 THIS STRIPS THE UTC CONVERSION
@@ -35,6 +37,8 @@ def campaign_document(
         "template_id": template_id,
         "template_name": template_name,
         "template_type": template_type,
+        "message_mode": message_mode,
+        "template_variables": list(template_variables or []),
 
         "provider_code": provider_code,
         "provider_name": provider_name,

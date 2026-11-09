@@ -11,12 +11,13 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from app.api_v1.dependencies import get_api_user, get_owned_campaign
 from app.database import campaigns_col, db, messages_col, templates_col
 from app.modules.campaigns.routes import create_campaign as create_campaign_ui
+from app.utils.template_variables import normalize_variable_name
 
 
 router = APIRouter(prefix="/campaigns", tags=["API Campaigns"])
@@ -29,7 +30,8 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 class CampaignCreateRequest(BaseModel):
     campaign_name: str
     template_id: str
-    numbers: list[str]
+    numbers: list[str] = Field(default_factory=list)
+    recipients: list[dict] = Field(default_factory=list)
 
 
 def _serialize_campaign(campaign: dict):
@@ -47,6 +49,8 @@ def _serialize_campaign(campaign: dict):
         "clicked_count": int(campaign.get("clicked_count", 0)),
         "replied_count": int(campaign.get("replied_count", 0)),
         "failed_count": int(campaign.get("failed_count", 0)),
+        "message_mode": campaign.get("message_mode", "simple"),
+        "template_variables": campaign.get("template_variables", []),
         "created_at": campaign.get("created_at"),
         "completed_at": campaign.get("completed_at"),
     }
@@ -65,7 +69,7 @@ def _normalize_numbers(values):
     return result
 
 
-def _read_uploaded_numbers(filename: str, content: bytes):
+def _read_uploaded_recipients(filename: str, content: bytes):
     suffix = (filename or "").lower().rsplit(".", 1)[-1]
     if suffix == "xlsx":
         try:
@@ -75,12 +79,17 @@ def _read_uploaded_numbers(filename: str, content: bytes):
             header = next(rows, None)
             if not header:
                 raise HTTPException(status_code=400, detail="Excel file is empty")
-            normalized_headers = [str(value or "").strip().lower() for value in header]
-            try:
-                mobile_column = normalized_headers.index("mobile")
-            except ValueError:
+            normalized_headers = [normalize_variable_name(value) for value in header]
+            if "mobile" not in normalized_headers:
                 raise HTTPException(status_code=400, detail='Excel file must contain a "Mobile" column in the first row')
-            return [row[mobile_column] for row in rows if mobile_column < len(row)]
+            recipients = []
+            for row in rows:
+                record = {normalized_headers[i]: row[i] for i in range(min(len(row), len(normalized_headers)))}
+                recipients.append({
+                    "mobile": record.pop("mobile", ""),
+                    "variables": record,
+                })
+            return recipients
         except HTTPException:
             raise
         except Exception:
@@ -92,10 +101,18 @@ def _read_uploaded_numbers(filename: str, content: bytes):
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="CSV or TXT file must use UTF-8 encoding")
-    values = []
-    for row in csv.reader(io.StringIO(text)):
-        values.extend(row)
-    return values
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return []
+    normalized_headers = [normalize_variable_name(value) for value in rows[0]]
+    if "mobile" in normalized_headers:
+        recipients = []
+        for row in rows[1:]:
+            record = {normalized_headers[i]: row[i] for i in range(min(len(row), len(normalized_headers)))}
+            recipients.append({"mobile": record.pop("mobile", ""), "variables": record})
+        return recipients
+    # Backward compatibility for headerless one-column number files.
+    return [{"mobile": value, "variables": {}} for row in rows for value in row]
 
 
 def _validate_template(template_id: str):
@@ -144,7 +161,7 @@ def _reserve_request(user: dict, key: str, fingerprint: str):
 async def _create_campaign(
     campaign_name: str,
     template_id: str,
-    numbers: list[str],
+    recipients: list[dict],
     idempotency_key: str | None,
     user: dict,
 ):
@@ -152,14 +169,28 @@ async def _create_campaign(
     if not campaign_name:
         raise HTTPException(status_code=400, detail="Campaign name is required")
     _validate_template(template_id)
-    if not numbers:
+    normalized_recipients = []
+    seen = set()
+    for recipient in recipients:
+        mobile_values = _normalize_numbers([recipient.get("mobile")])
+        if not mobile_values or mobile_values[0] in seen:
+            continue
+        seen.add(mobile_values[0])
+        normalized_recipients.append({
+            "mobile": mobile_values[0],
+            "variables": recipient.get("variables", {}),
+        })
+    if not normalized_recipients:
         raise HTTPException(status_code=400, detail="No valid mobile numbers were supplied")
 
     # API consumers may provide a stable key when they want safe retry semantics.
     # For normal interactive use, generate one so callers are not forced to do it.
     idempotency_key = (idempotency_key or "").strip() or str(uuid.uuid4())
 
-    fingerprint = _idempotency_fingerprint(campaign_name, template_id, numbers)
+    fingerprint = _idempotency_fingerprint(
+        campaign_name, template_id,
+        [json.dumps(item, sort_keys=True, default=str) for item in normalized_recipients],
+    )
     previous_response = _reserve_request(user, idempotency_key, fingerprint)
     if previous_response:
         return previous_response
@@ -169,7 +200,7 @@ async def _create_campaign(
             {
                 "campaign_name": campaign_name,
                 "template_id": template_id,
-                "numbers": numbers,
+                "recipients": normalized_recipients,
             },
             current_user=user,
         )
@@ -195,13 +226,15 @@ async def create_campaign_json(
     ),
     user=Depends(get_api_user),
 ):
-    if len(data.numbers) > MAX_JSON_NUMBERS:
+    raw_recipients = data.recipients or [
+        {"mobile": number, "variables": {}} for number in data.numbers
+    ]
+    if len(raw_recipients) > MAX_JSON_NUMBERS:
         raise HTTPException(
             status_code=413,
             detail=f"JSON requests support at most {MAX_JSON_NUMBERS} numbers; use /campaigns/upload",
         )
-    numbers = _normalize_numbers(data.numbers)
-    return await _create_campaign(data.campaign_name, data.template_id, numbers, idempotency_key, user)
+    return await _create_campaign(data.campaign_name, data.template_id, raw_recipients, idempotency_key, user)
 
 
 @router.post(
@@ -245,11 +278,10 @@ async def create_campaign_upload(
     content = await numbers_file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Number file exceeds the 20 MB limit")
-    values = _read_uploaded_numbers(numbers_file.filename or "", content)
-    numbers = _normalize_numbers(values)
-    if len(numbers) > MAX_UPLOAD_NUMBERS:
+    recipients = _read_uploaded_recipients(numbers_file.filename or "", content)
+    if len(recipients) > MAX_UPLOAD_NUMBERS:
         raise HTTPException(status_code=413, detail=f"A campaign supports at most {MAX_UPLOAD_NUMBERS} unique numbers")
-    return await _create_campaign(campaign_name, template_id, numbers, idempotency_key, user)
+    return await _create_campaign(campaign_name, template_id, recipients, idempotency_key, user)
 
 
 @router.get("", include_in_schema=False)

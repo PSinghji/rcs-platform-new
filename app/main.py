@@ -82,7 +82,7 @@ app.include_router(api_portal_router, include_in_schema=False)
 # ================= STATIC FILES =================
 # ✅ FIX: Pointing to the absolute path where your media is actually saved
 # This ensures that /static/uploads/file.mp4 is correctly resolved and served with the right MIME type.
-STATIC_PATH = "/var/www/rcs-platform/static"
+STATIC_PATH = os.getenv("RCS_STATIC_PATH", "/var/www/rcs-platform/static")
 if not os.path.exists(STATIC_PATH):
     os.makedirs(STATIC_PATH, exist_ok=True)
 

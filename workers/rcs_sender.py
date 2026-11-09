@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import users_col, messages_col, campaigns_col, templates_col
 from workers.providers.jio import JioAdapter
 from workers.providers.dovesoft import DoveSoftAdapter
+from app.utils.template_variables import extract_template_variables, render_template_payload
 
 # --- CONFIGURATION ---
 IST = pytz.timezone('Asia/Kolkata')
@@ -147,6 +148,41 @@ def process_chunk(msg_chunk, user, template, campaign):
         )
 
     if real_messages:
+        template_variables = template.get("variables") or extract_template_variables(template.get("content", {}))
+        is_dynamic = bool(template_variables) or campaign.get("message_mode") == "dynamic"
+        if is_dynamic:
+            # A Jio request has one shared data.content payload. Personalized
+            # recipients therefore require one request per rendered payload.
+            for message in real_messages:
+                try:
+                    rendered_payload = render_template_payload(
+                        template.get("content"), message.get("variables", {}), strict=True
+                    )
+                    process_real_messages(
+                        [message], user, campaign, current_adapter, service_type, rendered_payload, now
+                    )
+                except Exception as exc:
+                    messages_col.update_one(
+                        {"_id": message["_id"]},
+                        {"$set": {"status": "failed", "error_reason": str(exc), "locked_by": None}},
+                    )
+                    campaigns_col.update_one(
+                        {"_id": campaign["_id"]}, {"$inc": {"failed_count": 1}}
+                    )
+            check_campaign_completion(campaign["_id"])
+            return
+
+        process_real_messages(
+            real_messages, user, campaign, current_adapter, service_type,
+            template.get("content"), now
+        )
+
+    check_campaign_completion(campaign["_id"])
+
+
+def process_real_messages(real_messages, user, campaign, current_adapter, service_type, payload, now):
+    """Send messages sharing one rendered payload and update their statuses."""
+    if real_messages:
         mobiles = [str(m["mobile"]).strip() for m in real_messages]
         msg_ids = [str(m["_id"]) for m in real_messages]
         creds = user.get("provider_credentials", {}).get(user.get("active_provider"), {})
@@ -155,7 +191,7 @@ def process_chunk(msg_chunk, user, template, campaign):
             status_code, resp = current_adapter.send_bulk_messages(
                 credentials={"api_key": creds.get("api_key"), "agent_id": creds.get("agent_id")},
                 mobiles=mobiles,
-                payload=template.get("content"),
+                payload=payload,
                 message_ids=msg_ids
             )
 
@@ -212,7 +248,6 @@ def process_chunk(msg_chunk, user, template, campaign):
             )
             campaigns_col.update_one({"_id": campaign["_id"]}, {"$inc": {"failed_count": len(real_messages)}})
 
-    check_campaign_completion(campaign["_id"])
 
 def main_loop():
     logger.info(f"🚀 Sender ID: {WORKER_ID} | Threads: {THREAD_WORKERS} | Zone: Kolkata IST")

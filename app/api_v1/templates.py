@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.api_v1.dependencies import get_api_user
 from app.database import templates_col
+from app.utils.template_variables import extract_template_variables
 
 
 router = APIRouter(prefix="/templates", tags=["API Templates"])
@@ -40,6 +41,8 @@ def _serialize(template: dict, include_content: bool = False):
         "created_at": template.get("created_at"),
         "updated_at": template.get("updated_at"),
         "approved_at": template.get("approved_at"),
+        "message_mode": template.get("message_mode", "dynamic" if template.get("variables") else "simple"),
+        "variables": template.get("variables", []),
     }
     if include_content:
         result["content"] = template.get("content", {})
@@ -83,10 +86,11 @@ def create_template(data: TemplateCreateRequest, user=Depends(get_api_user)):
         raise HTTPException(status_code=400, detail="Invalid template name or type")
 
     if template_type in {"rich", "carousel"}:
-        try:
-            data.content["data"]["content"]["richCardDetails"]
-        except (KeyError, TypeError):
+        provider_content = data.content.get("data", {}).get("content", data.content)
+        if not isinstance(provider_content, dict) or "richCardDetails" not in provider_content:
             raise HTTPException(status_code=400, detail="Invalid Jio RCS content structure")
+
+    variables = extract_template_variables(data.content)
 
     now = datetime.now(IST)
     approval_status = "approved" if user.get("role") == "admin" else "pending"
@@ -94,6 +98,8 @@ def create_template(data: TemplateCreateRequest, user=Depends(get_api_user)):
         "name": name,
         "template_type": template_type,
         "content": data.content,
+        "message_mode": "dynamic" if variables else "simple",
+        "variables": variables,
         "owner_id": user["_id"],
         "owner_role": user.get("role", "user"),
         "owner_name": user.get("name", ""),

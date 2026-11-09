@@ -27,6 +27,11 @@ from app.models.campaign import campaign_document
 from app.models.message import message_document
 from app.utils.wallet import perform_wallet_transaction, debit_wallet , campaign_debit_transaction
 from app.utils.notifications import send_campaign_alert
+from app.utils.template_variables import (
+    extract_template_variables,
+    missing_template_variables,
+    normalize_variables,
+)
 from datetime import datetime , timedelta
 import pytz
 
@@ -112,13 +117,20 @@ def campaign_page(
             {
                 "name": 1,
                 "template_type": 1,
-                "owner_role": 1
+                "owner_role": 1,
+                "variables": 1,
+                "message_mode": 1,
             }
         ).sort("created_at", -1)
     )
 
     # Convert ObjectId → string
     for t in approved_templates:
+        # Keep templates created before personalization support compatible.
+        if not t.get("variables"):
+            full_template = templates_col.find_one({"_id": t["_id"]}, {"content": 1}) or {}
+            t["variables"] = extract_template_variables(full_template.get("content", {}))
+        t["message_mode"] = "dynamic" if t.get("variables") else "simple"
         t["_id"] = str(t["_id"])
 
     return templates.TemplateResponse(
@@ -143,16 +155,30 @@ async def create_campaign(
     try:
         # 1. LIGHTWEIGHT DATA EXTRACTION
         template_id = payload.get("template_id")
-        raw_numbers = payload.get("numbers", [])
-        
-        # We perform deduplication once here to get the correct 'total_messages' count
-        numbers = list(set([str(n).strip() for n in raw_numbers if n]))
-        total_messages = len(numbers) # FIX: Properly defined here
+        raw_recipients = payload.get("recipients") or [
+            {"mobile": number, "variables": {}} for number in payload.get("numbers", [])
+        ]
+
+        # Deduplicate by mobile while retaining recipient-level personalization.
+        recipients_by_mobile = {}
+        for item in raw_recipients:
+            if not isinstance(item, dict):
+                item = {"mobile": item, "variables": {}}
+            mobile = re.sub(r"\D", "", str(item.get("mobile", "")))
+            if len(mobile) == 12 and mobile.startswith("91"):
+                mobile = mobile[2:]
+            if re.fullmatch(r"[6-9]\d{9}", mobile):
+                recipients_by_mobile[mobile] = {
+                    "mobile": mobile,
+                    "variables": normalize_variables(item.get("variables", {})),
+                }
+        recipients = list(recipients_by_mobile.values())
+        total_messages = len(recipients)
 
         campaign_name = str(payload.get("campaign_name") or f"Campaign {datetime.now(IST).strftime('%Y-%m-%d %H:%M')}").strip()
 
-        if not template_id or not numbers:
-            raise HTTPException(400, "Template and numbers are required")
+        if not template_id or not recipients:
+            raise HTTPException(400, "Template and recipients are required")
 
         duplicate_name = campaigns_col.find_one({
             "$and": [
@@ -163,13 +189,33 @@ async def create_campaign(
         if duplicate_name:
             raise HTTPException(status_code=409, detail="Campaign name already exists for this user")
         
-        template = templates_col.find_one({"_id": ObjectId(template_id)})
+        template = templates_col.find_one({"_id": ObjectId(template_id), "status": "approved"})
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail="Approved template not found")
+
+        required_variables = template.get("variables") or extract_template_variables(template.get("content", {}))
+        if required_variables:
+            invalid_rows = []
+            for index, recipient in enumerate(recipients, start=1):
+                missing = missing_template_variables(required_variables, recipient["variables"])
+                if missing:
+                    invalid_rows.append(f"row {index}: {', '.join(missing)}")
+                    if len(invalid_rows) >= 5:
+                        break
+            if invalid_rows:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Missing dynamic values (" + "; ".join(invalid_rows) + ")",
+                )
 
         # 2. RESOLVE CREDENTIALS & SNAPSHOTS
         active_provider = current_user.get("active_provider")
         active_creds = current_user.get("provider_credentials", {}).get(active_provider, {})
+        if required_variables and str(active_provider).lower() != "jio":
+            raise HTTPException(
+                status_code=400,
+                detail="Dynamic templates are currently supported only with the Jio provider",
+            )
         
         api_key = active_creds.get("api_key")
         agent_id = active_creds.get("agent_id")
@@ -209,7 +255,9 @@ async def create_campaign(
             agent_id=agent_id, # Fix: required positional arg
             cutting_percent=cutting_pct,
             cutting_threshold=cutting_threshold,
-            created_by=current_user["_id"]
+            created_by=current_user["_id"],
+            message_mode="dynamic" if required_variables else "simple",
+            template_variables=required_variables,
         )
        
         campaign_doc["created_at"] = datetime.now(IST)
@@ -226,11 +274,11 @@ async def create_campaign(
         # Offloads heavy work to the background Submitter
         chunk_size = 50000 
         for i in range(0, total_messages, chunk_size):
-            batch = numbers[i : i + chunk_size]
+            batch = recipients[i : i + chunk_size]
             upload_job = {
                 "campaign_id": str(campaign_id),
                 "user_id": str(current_user["_id"]),
-                "numbers": batch
+                "recipients": batch
             }
             redis_client.lpush("rcs:campaign_upload", json.dumps(upload_job))
 

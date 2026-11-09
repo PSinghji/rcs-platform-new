@@ -6,7 +6,9 @@ from app.dependencies_ui import get_current_user_ui
 
 router = APIRouter(prefix="/api/media", tags=["Media"])
 
-UPLOAD_DIR = "/var/www/rcs-platform/static/uploads"
+STATIC_PATH = os.getenv("RCS_STATIC_PATH", "/var/www/rcs-platform/static")
+UPLOAD_DIR = os.path.join(STATIC_PATH, "uploads")
+PUBLIC_BASE_URL = os.getenv("RCS_PUBLIC_BASE_URL", "https://rcs.ostpl.com").rstrip("/")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_TYPES = ("image/jpeg", "image/png", "image/gif","image/webp", "video/mp4", "application/pdf")
@@ -39,5 +41,5 @@ async def upload_media(file: UploadFile = File(...), user=Depends(get_current_us
         await file.close()
 
     # The URL that the frontend will use to PREVIEW
-    public_url = f"https://rcs.ostpl.com/static/uploads/{filename}"
+    public_url = f"{PUBLIC_BASE_URL}/static/uploads/{filename}"
     return {"status": "success", "fileUrl": public_url}

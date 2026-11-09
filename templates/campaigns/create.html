@@ -24,9 +24,10 @@
               <select class="form-select border-2 shadow-none" id="template_id" required onchange="loadPreview()">
                 <option value="">-- Select Approved Template --</option>
                 {% for t in templates %}
-                  <option value="{{ t._id }}">{{ t.name }} ({{ t.template_type }})</option>
+                  <option value="{{ t._id }}" data-variables='{{ t.variables|default([], true)|tojson }}'>{{ t.name }} ({{ t.template_type }}{% if t.variables %}, dynamic{% endif %})</option>
                 {% endfor %}
               </select>
+              <div id="variableHelp" class="form-text"></div>
             </div>
           </div>
         </div>
@@ -132,6 +133,12 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <script>
+let importedRecipients = [];
+
+function selectedVariables() {
+  const option = document.getElementById('template_id').selectedOptions[0];
+  try { return JSON.parse(option?.dataset.variables || '[]'); } catch (_) { return []; }
+}
 /**
  * 1. UPDATED PREVIEW LOGIC
  */
@@ -139,6 +146,10 @@ async function loadPreview() {
   const tplId = document.getElementById("template_id").value;
   const box = document.getElementById("preview");
   if(!tplId) return;
+  const required = selectedVariables();
+  document.getElementById('variableHelp').innerHTML = required.length
+    ? `Dynamic template. Upload CSV/XLSX with <strong>Mobile</strong> and: <strong>${required.join(', ')}</strong>`
+    : 'Simple template. Upload or paste mobile numbers.';
 
   try {
     const res = await fetch(`/ui/templates/preview/${tplId}`);
@@ -214,17 +225,43 @@ document.getElementById('numberFile').addEventListener('change', function(e) {
     const data = new Uint8Array(e.target.result);
     const wb = XLSX.read(data, {type: 'array'});
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
-    processNumbers(rows.flat().join('\n'));
+    const required = selectedVariables();
+    if (required.length) {
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval: ''});
+      const normalizedRows = rows.map(row => Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_'), value])
+      ));
+      const missingHeaders = ['mobile', ...required].filter(header =>
+        !normalizedRows.length || !(header in normalizedRows[0])
+      );
+      if (missingHeaders.length) {
+        importedRecipients = [];
+        return Swal.fire('Invalid File', `Missing columns: ${missingHeaders.join(', ')}`, 'error');
+      }
+      importedRecipients = normalizedRows.map(row => ({
+        mobile: row.mobile,
+        variables: Object.fromEntries(required.map(name => [name, row[name]]))
+      }));
+      processNumbers(importedRecipients.map(item => item.mobile).join('\n'), false);
+    } else {
+      const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+      importedRecipients = [];
+      processNumbers(rows.flat().join('\n'));
+    }
   };
   reader.readAsArrayBuffer(e.target.files[0]);
 });
 
-document.getElementById('numbers').addEventListener('blur', function() {
-    processNumbers(this.value);
+document.getElementById('numbers').addEventListener('input', function() {
+    if (selectedVariables().length) importedRecipients = [];
 });
 
-function processNumbers(str) {
+document.getElementById('numbers').addEventListener('blur', function() {
+    processNumbers(this.value, false);
+});
+
+function processNumbers(str, clearImported = true) {
+  if (clearImported && selectedVariables().length) importedRecipients = [];
   const raw = str.split(/[\n,]+/).map(n => n.trim()).filter(n => n.length > 0);
   const valid = new Set();
   let dups = 0, inv = 0;
@@ -270,10 +307,20 @@ document.getElementById('campaignForm').onsubmit = async (e) => {
     });
   }
 
+  const required = selectedVariables();
+  if (required.length && importedRecipients.length === 0) {
+    return Swal.fire({
+      icon: 'warning',
+      title: 'Dynamic data required',
+      text: `Upload an Excel/CSV file containing Mobile and ${required.join(', ')} columns.`
+    });
+  }
+
   const payload = {
     campaign_name: document.getElementById('campaign_name').value,
     template_id: document.getElementById('template_id').value,
-    numbers: numbers
+    numbers: required.length ? [] : numbers,
+    recipients: required.length ? importedRecipients : []
   };
 
   try {

@@ -796,10 +796,14 @@ def preview_template(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Return only the data needed for the preview
+    from app.utils.template_variables import extract_template_variables
+    variables = tpl.get("variables") or extract_template_variables(tpl.get("content", {}))
     return {
         "status": "success",
         "template_type": tpl.get("template_type"),
-        "content": tpl.get("content")
+        "content": tpl.get("content"),
+        "message_mode": "dynamic" if variables else "simple",
+        "variables": variables,
     }
 
 @router.get("/templates/view/{template_id}", response_class=HTMLResponse)
