@@ -1,0 +1,344 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<div class="container-fluid pb-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold text-dark m-0">Create RCS Campaign</h4>
+    <a href="/ui/campaigns/list" class="btn btn-outline-secondary btn-sm rounded-pill">
+      <i class="fas fa-list me-1"></i> View All Campaigns
+    </a>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-7">
+      <form id="campaignForm">
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+          <div class="card-body p-4">
+            <h6 class="fw-bold text-primary text-uppercase small mb-3">1. Campaign Details</h6>
+            <div class="mb-4">
+              <label class="form-label fw-bold small text-muted">Campaign Name</label>
+              <input type="text" class="form-control form-control-lg border-2 shadow-none" id="campaign_name" placeholder="e.g. Festival Promo" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label fw-bold small text-muted">Choose Message Template</label>
+              <select class="form-select border-2 shadow-none" id="template_id" required onchange="loadPreview()">
+                <option value="">-- Select Approved Template --</option>
+                {% for t in templates %}
+                  <option value="{{ t._id }}">{{ t.name }} ({{ t.template_type }})</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+          <div class="card-body p-4">
+            <h6 class="fw-bold text-primary text-uppercase small mb-3">2. Audience & Numbers</h6>
+            
+            <div class="upload-area border-2 border-dashed rounded-4 p-4 text-center mb-4 bg-light position-relative" id="dropZone">
+              <i class="fas fa-file-excel fa-2x text-success mb-2"></i>
+              <p class="mb-1 fw-bold">Import from Excel or CSV</p>
+              <p class="text-muted small">Indian 10-digit numbers. Duplicates will be removed.</p>
+              <input type="file" id="numberFile" class="position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" accept=".csv,.xlsx,.xls">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold small text-muted">Manual Entry / List Preview</label>
+              <textarea class="form-control border-2 shadow-none font-monospace" id="numbers" rows="6" placeholder="Paste numbers here..." required></textarea>
+              <div class="form-text extra-small text-primary">Note: Numbers are automatically cleaned and deduplicated when you click outside this box.</div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-6 col-md-3 text-center">
+                <div class="p-2 border rounded-3 bg-white">
+                  <div class="text-muted extra-small fw-bold">TOTAL</div>
+                  <div id="totalCount" class="fw-bold">0</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div class="p-2 border rounded-3 bg-soft-success">
+                  <div class="text-success extra-small fw-bold">VALID</div>
+                  <div id="validCount" class="fw-bold">0</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div class="p-2 border rounded-3 bg-soft-warning">
+                  <div class="text-warning extra-small fw-bold">DUPLICATES</div>
+                  <div id="duplicateCount" class="fw-bold">0</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3 text-center">
+                <div class="p-2 border rounded-3 bg-soft-danger">
+                  <div class="text-danger extra-small fw-bold">INVALID</div>
+                  <div id="invalidCount" class="fw-bold">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100 rounded-pill py-3 shadow-sm fw-bold">
+          <i class="fas fa-paper-plane me-2"></i> Launch Campaign Now
+        </button>
+      </form>
+    </div>
+
+    <div class="col-xl-5">
+      <div class="sticky-top" style="top: 2rem;">
+        <h6 class="fw-bold text-muted text-uppercase small mb-3 ms-4">Live RCS Preview</h6>
+        <div class="phone-mockup">
+          <div class="phone-speaker"></div>
+          <div class="phone-screen bg-light">
+            <div class="chat-header d-flex align-items-center p-3 border-bottom bg-white">
+              <div class="avatar bg-primary text-white rounded-circle me-2" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:12px">B</div>
+              <div class="fw-bold small">Business Messenger <i class="fas fa-check-circle text-primary ms-1"></i></div>
+            </div>
+            <div id="preview" class="chat-body p-3 overflow-auto">
+              <div class="text-center text-muted small mt-5 pt-5">
+                <i class="fas fa-hand-pointer fa-2x mb-3 opacity-25"></i>
+                <p>Select a template</p>
+              </div>
+            </div>
+          </div>
+          <div class="phone-button"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .phone-mockup { width: 300px; height: 600px; background: #1a1a1a; border-radius: 40px; margin: 0 auto; border: 8px solid #333; position: relative; }
+  .phone-speaker { width: 50px; height: 5px; background: #333; position: absolute; top: 15px; left: 50%; transform: translateX(-50%); border-radius: 10px; }
+  .phone-screen { position: absolute; top: 40px; bottom: 40px; left: 10px; right: 10px; border-radius: 5px; overflow: hidden; display: flex; flex-direction: column; }
+  .chat-body { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .chat-body::-webkit-scrollbar { display: none; }
+  .phone-button { width: 35px; height: 35px; border: 2px solid #333; border-radius: 50%; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); }
+  
+  .bg-soft-success { background-color: #e8fadf; color: #28a745; }
+  .bg-soft-warning { background-color: #fff8e1; color: #ffc107; }
+  .bg-soft-danger { background-color: #ffebee; color: #dc3545; }
+  .extra-small { font-size: 0.65rem; line-height: 1.2; }
+  .upload-area { border-style: dashed !important; transition: 0.3s; }
+  .upload-area:hover { border-color: #0d6efd; background-color: #f1f7ff; }
+
+  /* Carousel Specific Styles */
+  .preview-carousel { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .carousel-card-preview { min-width: 210px; max-width: 210px; scroll-snap-align: center; background: white; border-radius: 15px; overflow: hidden; border: 1px solid #ddd; }
+  
+  @media (max-width: 1200px) { .phone-mockup { display: none; } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<script>
+/**
+ * 1. UPDATED PREVIEW LOGIC
+ */
+async function loadPreview() {
+  const tplId = document.getElementById("template_id").value;
+  const box = document.getElementById("preview");
+  if(!tplId) return;
+
+  try {
+    const res = await fetch(`/ui/templates/preview/${tplId}`);
+    const data = await res.json();
+    const content = data.content;
+    let html = "";
+
+    // 1. Plain Text Template
+    if (content?.plainText) {
+      html = `<div class="bg-white rounded-3 p-3 shadow-sm small mb-2">${content.plainText}</div>`;
+      html += renderButtons(content.suggestions);
+    } 
+    // 2. Standalone Rich Card
+    else if (content?.richCardDetails?.standalone) {
+      const card = content.richCardDetails.standalone.content;
+      html = `<div class="bg-white rounded-4 shadow-sm overflow-hidden mb-2">
+                ${renderMedia(card.cardMedia)}
+                <div class="p-2">
+                  <h6 class="small fw-bold mb-1">${card.cardTitle || ""}</h6>
+                  <p class="extra-small text-muted mb-0">${card.cardDescription || ""}</p>
+                </div>
+              </div>${renderButtons(card.suggestions)}`;
+    }
+    // 3. Carousel Template (Fixing .contents structure)
+    else if (content?.richCardDetails?.carousel) {
+      const carouselData = content.richCardDetails.carousel;
+      html = `<div class="preview-carousel">
+                ${carouselData.contents.map(c => `
+                  <div class="carousel-card-preview shadow-sm">
+                    ${renderMedia(c.cardMedia)}
+                    <div class="p-2">
+                      <div class="fw-bold extra-small text-truncate">${c.cardTitle || "Title"}</div>
+                      <div class="extra-small text-muted text-truncate mb-2">${c.cardDescription || ""}</div>
+                      ${renderButtons(c.suggestions)}
+                    </div>
+                  </div>`).join('')}
+              </div>`;
+    }
+    box.innerHTML = html;
+  } catch(e) { 
+    console.error("Preview Error:", e);
+    box.innerHTML = `<div class="text-center text-danger small">Error loading preview</div>`;
+  }
+}
+
+function renderMedia(m) {
+  if(!m?.contentInfo?.fileUrl) {
+      return `<div class="bg-secondary opacity-25 w-100 d-flex align-items-center justify-content-center" style="height:120px;"><i class="fas fa-image"></i></div>`;
+  }
+  const url = m.contentInfo.fileUrl;
+  // Handle video vs image
+  if (url.match(/\.(mp4|webm|ogg)$/i)) {
+      return `<video autoplay muted loop class="w-100" style="height:120px;object-fit:cover;"><source src="${url}"></video>`;
+  }
+  return `<img src="${url}" class="w-100" style="height:120px;object-fit:cover;">`;
+}
+
+function renderButtons(s) {
+  if(!s || s.length === 0) return "";
+  return `<div class="d-grid gap-1 mt-1">${s.map(btnObj => {
+      // Handle both reply and action formats
+      const label = btnObj.reply ? btnObj.reply.plainText : (btnObj.action ? btnObj.action.plainText : "Action");
+      return `<div class="btn btn-sm btn-outline-primary rounded-pill bg-white py-1" style="font-size:0.6rem; pointer-events:none;">${label}</div>`;
+  }).join('')}</div>`;
+}
+
+/**
+ * 2. EXCEL & NUMBER LOGIC
+ */
+document.getElementById('numberFile').addEventListener('change', function(e) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type: 'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+    processNumbers(rows.flat().join('\n'));
+  };
+  reader.readAsArrayBuffer(e.target.files[0]);
+});
+
+document.getElementById('numbers').addEventListener('blur', function() {
+    processNumbers(this.value);
+});
+
+function processNumbers(str) {
+  const raw = str.split(/[\n,]+/).map(n => n.trim()).filter(n => n.length > 0);
+  const valid = new Set();
+  let dups = 0, inv = 0;
+
+  raw.forEach(n => {
+    let c = n.replace(/\D/g, '');
+    if (c.length === 12 && c.startsWith('91')) c = c.slice(2);
+    if (c.length === 11 && c.startsWith('0')) c = c.slice(1);
+
+    if(/^[6-9]\d{9}$/.test(c)) {
+      if(valid.has(c)) dups++; 
+      else valid.add(c); 
+    } else { 
+        inv++; 
+    }
+  });
+
+  document.getElementById('numbers').value = Array.from(valid).join('\n');
+  document.getElementById('totalCount').innerText = raw.length;
+  document.getElementById('validCount').innerText = valid.size;
+  document.getElementById('duplicateCount').innerText = dups;
+  document.getElementById('invalidCount').innerText = inv;
+}
+
+/**
+ * 3. SUBMIT TO BACKEND
+ */
+document.getElementById('campaignForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  
+  // Get and clean numbers
+  const numbers = document.getElementById('numbers').value
+    .split('\n')
+    .map(n => n.trim())
+    .filter(n => n.length > 0);
+
+  if (numbers.length === 0) {
+    return Swal.fire({
+      icon: 'warning',
+      title: 'Missing Numbers',
+      text: 'Please add at least one valid mobile number.'
+    });
+  }
+
+  const payload = {
+    campaign_name: document.getElementById('campaign_name').value,
+    template_id: document.getElementById('template_id').value,
+    numbers: numbers
+  };
+
+  try {
+    // UI Feedback: Loading state
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+
+    const res = await fetch('/ui/campaigns/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const out = await res.json();
+
+    if (res.ok) {
+      // SUCCESS
+      await Swal.fire({
+        icon: 'success',
+        title: 'Campaign Launched!',
+        text: out.message || 'Your campaign has been queued successfully.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      window.location.href = "/ui/campaigns/list";
+    } 
+    else if (res.status === 402 || (out.detail && out.detail.includes("Insufficient balance"))) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Insufficient Balance',
+        html: `
+          <div class="mb-3">${out.detail || 'You do not have enough credits.'}</div>
+          <div class="p-2 bg-light rounded small text-muted border">
+            Requirement for ${numbers.length.toLocaleString()} messages exceeded your current wallet limit.
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-wallet me-2"></i> Recharge Now',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#28a745'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = "/ui/wallet/recharge";
+        }
+      });
+    }
+    else {
+      // OTHER ERRORS (400, 404, 500)
+      Swal.fire({
+        icon: 'error',
+        title: 'Launch Failed',
+        text: out.detail || "An error occurred while creating the campaign."
+      });
+    }
+  } catch (err) {
+    console.error("Submit Error:", err);
+    Swal.fire({
+      icon: 'error',
+      title: 'Connection Error',
+      text: 'Could not reach the server. Please check your internet connection.'
+    });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> Launch Campaign Now';
+  }
+};
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-primary m-0">Wallet Management</h4>
+            <p class="text-muted small mb-0">Manage user balances and view transaction history.</p>
+        </div>
+        <div class="input-group shadow-sm" style="width: 350px;">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="userSearch" class="form-control border-start-0" placeholder="Search by name, username or role...">
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm overflow-hidden">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0" id="userTable">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 py-3 border-0 text-uppercase small fw-bold text-muted">User Details</th>
+                        <th class="py-3 border-0 text-uppercase small fw-bold text-muted">Current Balance</th>
+                        <th class="pe-4 py-3 border-0 text-uppercase small fw-bold text-muted text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in manageable_users %}
+                    <tr class="user-row border-bottom">
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-sm me-3 bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold">
+                                    {{ u.name[0]|upper }}
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ u.name }}</div>
+                                    <div class="text-muted small">@{{ u.username }} • <span class="badge bg-light text-dark border">{{ u.role|upper }}</span></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="fw-bold fs-5 text-dark"> {{ "{:,.0f}".format(u.wallet_balance|default(0)) }}</span>
+                        </td>
+                        <td class="pe-4 text-end">
+                            <button class="btn btn-sm btn-soft-success me-1" onclick="toggleInlineForm('{{ u._id }}', 'credit')">
+                                <i class="bi bi-plus-lg me-1"></i> Credit
+                            </button>
+                            <button class="btn btn-sm btn-soft-danger me-1" onclick="toggleInlineForm('{{ u._id }}', 'debit')">
+                                <i class="bi bi-dash-lg me-1"></i> Debit
+                            </button>
+                            <a href="/ui/wallet/history/{{ u._id }}" class="btn btn-sm btn-light border shadow-sm" title="View History">
+                                <i class="bi bi-clock-history text-primary"></i>
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr id="form-{{ u._id }}" class="bg-light d-none inline-form-row">
+                        <td colspan="3" class="p-4 border-start border-4" id="border-{{ u._id }}">
+                            <form action="/ui/admin/users/wallet/process" method="POST" class="row g-3 align-items-end">
+                                <input type="hidden" name="target_id" value="{{ u._id }}">
+                                <input type="hidden" name="action" id="action-{{ u._id }}">
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold text-uppercase text-muted" id="type-label-{{ u._id }}"></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white"></span>
+                                        <input type="number" name="amount" class="form-control" placeholder="0.00" step="0.01" min="0.01" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-uppercase text-muted">Reason / Transaction Remark</label>
+                                    <input type="text" name="reason" class="form-control" placeholder="Enter reason for this update..." required minlength="5">
+                                </div>
+                                <div class="col-md-3 text-end pb-1">
+                                    <button type="submit" class="btn btn-primary px-4">Update Wallet</button>
+                                    <button type="button" class="btn btn-outline-secondary px-3 ms-2" onclick="closeForm('{{ u._id }}')">Cancel</button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * Detect Success/Error from URL and show SweetAlert
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const successMsg = urlParams.get('success');
+    const errorMsg = urlParams.get('error');
+
+    if (successMsg) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: successMsg,
+            timer: 3000,
+            showConfirmButton: false
+        });
+        // Clean URL after showing alert
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    if (errorMsg) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Transaction Failed',
+            text: errorMsg,
+            confirmButtonColor: '#dc3545'
+        });
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+/**
+ * Existing Functions
+ */
+function toggleInlineForm(userId, action) {
+    document.querySelectorAll('.inline-form-row').forEach(el => el.classList.add('d-none'));
+    const formRow = document.getElementById(`form-${userId}`);
+    const actionInput = document.getElementById(`action-${userId}`);
+    const label = document.getElementById(`type-label-${userId}`);
+    const borderCell = document.getElementById(`border-${userId}`);
+
+    actionInput.value = action;
+    if(action === 'credit') {
+        label.innerHTML = '<i class="bi bi-plus-circle-fill text-success me-1"></i> Add Credit Amount';
+        borderCell.style.borderLeftColor = "#198754"; 
+    } else {
+        label.innerHTML = '<i class="bi bi-dash-circle-fill text-danger me-1"></i> Deduct Debit Amount';
+        borderCell.style.borderLeftColor = "#dc3545";
+    }
+    formRow.classList.remove('d-none');
+}
+
+function closeForm(userId) {
+    document.getElementById(`form-${userId}`).classList.add('d-none');
+}
+
+document.getElementById('userSearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    document.querySelectorAll('.user-row').forEach(row => {
+        let text = row.innerText.toLowerCase();
+        if(text.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+            let formRow = row.nextElementSibling;
+            if(formRow && formRow.classList.contains('inline-form-row')) {
+                formRow.classList.add('d-none');
+            }
+        }
+    });
+});
+</script>
+
+<style>
+    /* ... (Your existing styles) ... */
+    .btn-soft-success { background-color: #d1e7dd; color: #0f5132; border: none; }
+    .btn-soft-success:hover { background-color: #198754; color: #fff; }
+    .btn-soft-danger { background-color: #f8d7da; color: #842029; border: none; }
+    .btn-soft-danger:hover { background-color: #dc3545; color: #fff; }
+    .user-row { transition: all 0.2s; cursor: default; }
+    .user-row:hover { background-color: #f8fafc !important; }
+    .avatar-sm { width: 38px; height: 38px; font-size: 14px; }
+</style>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<div class="container-fluid pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold text-dark">Admin Dashboard</h4>
+        <div class="d-flex gap-2">
+            <select id="resellerSelect" class="form-select shadow-sm" style="min-width: 200px;" onchange="loadStats()">
+                <option value="">Global Overview</option>
+                {% for res in resellers_list %}
+                <option value="{{ res.id }}">{{ res.name }} (Reseller)</option>
+                {% endfor %}
+            </select>
+            <select id="timeFilter" class="form-select shadow-sm" onchange="loadStats()">
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="7days">Last 7 Days</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <p class="text-muted small text-uppercase mb-1">Users / Resellers</p>
+                <h3 class="fw-bold text-dark mb-0" id="user-counts">0 / 0</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <p class="text-muted small text-uppercase mb-1">Total Credit</p>
+                <h3 class="fw-bold text-success mb-0" id="credit-total">0</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <p class="text-muted small text-uppercase mb-1">Total Debit</p>
+                <h3 class="fw-bold text-danger mb-0" id="debit-total">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+        <h6 class="fw-bold text-muted text-uppercase mb-4">Today's Campaign Analysis</h6>
+        <div class="row g-4">
+            <div class="col-md-7">
+                <div class="row g-3 text-center">
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-3">
+                            <small class="d-block text-muted">Campaigns</small>
+                            <span class="fs-4 fw-bold" id="c-count">0</span>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-3 border-start border-primary border-4">
+                            <small class="d-block text-muted">Mobile Nos</small>
+                            <span class="fs-4 fw-bold" id="m-count">0</span>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-3 border-start border-warning border-4">
+                            <small class="d-block text-muted">Cutting</small>
+                            <span class="fs-4 fw-bold text-warning" id="cut-count">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4" style="height: 300px;">
+                    <canvas id="deliveryChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-5 d-flex align-items-center justify-content-center border-start">
+                <div class="text-center">
+                    <h1 class="display-5 fw-bold text-primary" id="rcs-percentage">0%</h1>
+                    <p class="text-muted">Total RCS Delivery Rate</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let deliveryChart;
+
+async function loadStats() {
+    const period = document.getElementById('timeFilter').value;
+    const resId = document.getElementById('resellerSelect').value;
+    const response = await fetch(`/api/admin/dashboard-stats?period=${period}&user_id=${resId}`);
+    const data = await response.json();
+
+    // Text Updates
+    document.getElementById('user-counts').innerText = `${data.users.total} / ${data.users.resellers}`;
+    document.getElementById('credit-total').innerText = `₹${(data.wallet.credit || 0).toLocaleString()}`;
+    document.getElementById('debit-total').innerText = `₹${(data.wallet.debit || 0).toLocaleString()}`;
+    document.getElementById('c-count').innerText = data.campaigns.count;
+    document.getElementById('m-count').innerText = data.campaigns.total_mobile;
+    document.getElementById('cut-count').innerText = data.campaigns.cutting;
+
+    const rcsRate = data.campaigns.total_mobile > 0 ? ((data.campaigns.rcs / data.campaigns.total_mobile) * 100).toFixed(1) : 0;
+    document.getElementById('rcs-percentage').innerText = rcsRate + "%";
+
+    // Chart Update
+    const ctx = document.getElementById('deliveryChart').getContext('2d');
+    if (deliveryChart) deliveryChart.destroy();
+    deliveryChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['RCS Success', 'Failed'],
+            datasets: [{
+                data: [data.campaigns.rcs, data.campaigns.failed],
+                backgroundColor: ['#0d6efd', '#dc3545'],
+                cutout: '80%'
+            }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false }
+    });
+}
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}

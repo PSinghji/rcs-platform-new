@@ -1,0 +1,78 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>My Templates</h4>
+  <span class="text-muted small">
+    Templates you created. Pending ones require admin approval.
+  </span>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        {% if templates %}
+          {% for t in templates %}
+          <tr>
+            <td class="fw-semibold">{{ t.name }}</td>
+
+            <td>
+              <span class="badge bg-secondary text-uppercase">
+                {{ t.template_type }}
+              </span>
+            </td>
+
+            <td>
+              {% if t.status == "approved" %}
+                <span class="badge bg-success">Approved</span>
+
+              {% elif t.status == "rejected" %}
+                <span class="badge bg-danger">Rejected</span>
+                {% if t.admin_comment %}
+                  <div class="text-danger small mt-1">
+                    {{ t.admin_comment }}
+                  </div>
+                {% endif %}
+
+              {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% endif %}
+            </td>
+
+            <td class="text-muted small">
+              {{ t.created_at }}
+            </td>
+
+            <td class="text-end">
+              <!-- ✅ PAGE-BASED PREVIEW (SAFE & CORRECT) -->
+              <a href="/ui/templates/view/{{ t.id }}" class="btn btn-sm btn-primary">
+                    Preview
+               </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">
+              No templates found
+            </td>
+          </tr>
+        {% endif %}
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

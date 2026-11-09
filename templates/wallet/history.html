@@ -1,0 +1,283 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-primary m-0">Wallet History</h4>
+            <p class="text-muted small mb-0">Ledger for: <span class="fw-bold text-dark">{{ target_user.name }}</span> (@{{ target_user.username }})</p>
+        </div>
+        <div>
+            <a href="/ui/wallet/manage" class="btn btn-outline-secondary btn-sm shadow-sm rounded-pill px-3">
+                <i class="fas fa-arrow-left me-1"></i> Back to Manager
+            </a>
+            <a href="/ui/users/list" class="btn btn-outline-secondary btn-sm shadow-sm rounded-pill px-3">
+                <i class="fas fa-arrow-left me-1"></i> Back to Users
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-body bg-white py-3">
+            <div class="row g-3 align-items-center justify-content-between">
+                
+                <div class="col-md-3">
+                    <label class="small fw-bold text-muted mb-1">Filter by Date</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-calendar-event text-primary"></i></span>
+                        <input type="date" id="dateFilter" class="form-control border-0 bg-light shadow-none fw-bold" style="font-size: 0.9rem;">
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <label class="small fw-bold text-muted mb-1">Search Transaction</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-search text-primary"></i></span>
+                        <input type="text" id="tableSearch" class="form-control border-0 bg-light shadow-none small" placeholder="Search reason, amount, admin...">
+                    </div>
+                </div>
+
+                <div class="col-md-4 text-md-end">
+                    <div class="d-inline-flex align-items-center bg-success-subtle border border-success-subtle rounded-4 px-4 py-2">
+                        <div class="text-start me-3">
+                            <div class="extra-small text-success text-uppercase fw-bold opacity-75">Current Balance</div>
+                            <div class="h4 mb-0 fw-bold text-success">
+                                 {{ "{:,.0f}".format(target_user.wallet_balance|default(0)) }}
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-circle d-flex align-items-center justify-content-center text-success shadow-sm" style="width: 40px; height: 40px;">
+                            <i class="bi bi-wallet2 fs-5"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="historyTable">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 py-3 text-uppercase small fw-bold text-muted" style="width: 180px;">Date & Time</th>
+                        <th class="py-3 text-uppercase small fw-bold text-muted text-center">Type</th>
+                        <th class="py-3 text-uppercase small fw-bold text-muted">Amount</th>
+                        <th class="py-3 text-uppercase small fw-bold text-muted">Balance After</th>
+                        <th class="py-3 text-uppercase small fw-bold text-muted">Reason / Remark</th>
+                        <th class="pe-4 py-3 text-uppercase small fw-bold text-muted text-end">Performed By</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                     {% for tx in history %}
+                      <tr class="history-row border-bottom-0">
+                          
+                          <td class="ps-4">
+                              <div class="d-flex align-items-center">
+                                  <div class="bg-light text-secondary rounded p-2 me-2 d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                      <i class="bi bi-clock"></i>
+                                  </div>
+                                  <div>
+                                      <div class="fw-bold text-dark local-time" 
+                                           data-utc="{{ tx.created_at.isoformat() if tx.created_at else '' }}Z">
+                                          --:--
+                                      </div>
+                                      <div class="extra-small text-muted local-date">--/--/----</div>
+                                  </div>
+                              </div>
+                          </td>
+                          
+                          <td class="text-center">
+                              {% if tx.action == 'credit' %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+                                    <i class="bi bi-arrow-down-left me-1"></i> CREDIT
+                                </span>
+                              {% else %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-2">
+                                    <i class="bi bi-arrow-up-right me-1"></i> DEBIT
+                                </span>
+                              {% endif %}
+                          </td>
+
+                          <td>
+                             <span class="fw-bold fs-6 {% if tx.action == 'credit' %}text-success{% else %}text-danger{% endif %}">
+                                 {% if tx.action == 'credit' %}+{% else %}-{% endif %} {{ "{:,.0f}".format(tx.amount|default(0)|float) }}
+                             </span>
+                          </td>
+
+                          <td>
+                              <span class="fw-bold text-dark">{{ "{:,.0f}".format(tx.balance_after|default(0)|float) }}</span>
+                          </td>
+
+                          <td>
+                              <div class="text-secondary small fw-medium" style="max-width: 350px; line-height: 1.4;">
+                                  {{ tx.reason }}
+                              </div>
+                          </td>
+                          
+                          <td class="pe-4 text-end">
+                              <span class="badge bg-light text-dark border fw-bold px-3 py-2">
+                                  <i class="fas fa-user-shield text-primary me-1"></i> {{ tx.performer_name }}
+                              </span>
+                          </td>
+                      </tr>
+                     {% else %}
+                      <tr>
+                          <td colspan="6" class="text-center py-5">
+                              <div class="text-muted opacity-50">
+                                  <i class="bi bi-receipt-cutoff display-1"></i>
+                                  <p class="mt-2 fw-bold">No Transaction History Found</p>
+                              </div>
+                          </td>
+                      </tr>
+                     {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-footer bg-white border-top-0 py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted small fw-bold" id="paginationInfo">Loading data...</div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 gap-1" id="paginationControls">
+                        </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .extra-small { font-size: 0.75rem; }
+    .table thead th { letter-spacing: 0.5px; }
+    .page-link {
+        color: var(--text-muted, #64748b);
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0; border-radius: 8px;
+        min-width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s; font-weight: 600;
+    }
+    .page-link:hover { background-color: #e2e8f0; color: var(--accent-color, #3b82f6); transform: translateY(-2px); }
+    .page-item.active .page-link { background-color: var(--accent-color, #3b82f6) !important; color: #fff !important; border-color: transparent; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .page-item.disabled .page-link { opacity: 0.4; cursor: not-allowed; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // ============================================
+    // 1. TIMEZONE FIX (The most important part)
+    // ============================================
+    document.querySelectorAll('.local-time').forEach(el => {
+        const utcStr = el.getAttribute('data-utc'); // Looks like "2026-01-12T10:00:00Z"
+        if (utcStr && utcStr !== 'Z') {
+            try {
+                const date = new Date(utcStr);
+                
+                // Convert to User's Local Time (e.g., IST)
+                // 1. Set Time (e.g., 03:30 PM)
+                el.innerText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                // 2. Set Date (e.g., 12 Jan 2026)
+                const dateEl = el.nextElementSibling;
+                if(dateEl) {
+                    dateEl.innerText = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+                }
+            } catch(e) {
+                console.error("Date parse error", e);
+            }
+        }
+    });
+
+    // ============================================
+    // 2. SEARCH & PAGINATION LOGIC
+    // ============================================
+    const searchInput = document.getElementById('tableSearch');
+    const dateInput = document.getElementById('dateFilter');
+    const tbody = document.getElementById('tableBody');
+    const allRows = Array.from(tbody.querySelectorAll('tr.history-row'));
+    const paginationControls = document.getElementById('paginationControls');
+    const paginationInfo = document.getElementById('paginationInfo');
+
+    let currentPage = 1;
+    const rowsPerPage = 10;
+    let filteredRows = [...allRows];
+
+    function renderTable() {
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        allRows.forEach(row => row.style.display = 'none'); // Hide all
+
+        const rowsToShow = filteredRows.slice(start, end);
+        if (rowsToShow.length > 0) {
+            rowsToShow.forEach(row => row.style.display = '');
+            paginationInfo.innerText = `Showing ${start + 1} to ${Math.min(end, filteredRows.length)} of ${filteredRows.length} entries`;
+        } else {
+            paginationInfo.innerText = "No matching transactions found.";
+        }
+        renderPagination();
+    }
+
+    function renderPagination() {
+        paginationControls.innerHTML = '';
+        const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+        if (totalPages <= 1) return;
+
+        const createBtn = (text, page, isActive, isDisabled) => {
+            const li = document.createElement('li');
+            li.className = `page-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+            li.innerHTML = `<button class="page-link" onclick="goToPage(${page})">${text}</button>`;
+            return li;
+        };
+
+        paginationControls.appendChild(createBtn('<i class="bi bi-chevron-left"></i>', currentPage - 1, false, currentPage === 1));
+        
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                paginationControls.appendChild(createBtn(i, i, i === currentPage));
+            } else if (i === currentPage - 2 || i === currentPage + 2) {
+                const dots = document.createElement('li');
+                dots.className = 'page-item disabled';
+                dots.innerHTML = '<span class="page-link border-0 bg-transparent">...</span>';
+                paginationControls.appendChild(dots);
+            }
+        }
+        
+        paginationControls.appendChild(createBtn('<i class="bi bi-chevron-right"></i>', currentPage + 1, false, currentPage === totalPages));
+    }
+
+    window.goToPage = function(page) { currentPage = page; renderTable(); };
+
+    function applyFilters() {
+        const term = searchInput.value.toLowerCase().trim();
+        const dateVal = dateInput.value; 
+
+        filteredRows = allRows.filter(row => {
+            const textMatch = row.innerText.toLowerCase().includes(term);
+            
+            let dateMatch = true;
+            if (dateVal) {
+                // To filter by date, we must parse the localized date text we just set
+                // Or better, use the data-utc attribute and check strictly
+                const utcStr = row.querySelector('.local-time').getAttribute('data-utc');
+                if (utcStr) {
+                    const localDate = new Date(utcStr).toLocaleDateString('en-CA'); // Returns YYYY-MM-DD in local time
+                    dateMatch = (localDate === dateVal);
+                }
+            }
+            return textMatch && dateMatch;
+        });
+
+        currentPage = 1;
+        renderTable();
+    }
+
+    searchInput.addEventListener('keyup', applyFilters);
+    dateInput.addEventListener('change', applyFilters);
+
+    renderTable();
+});
+</script>
+
+{% endblock %}

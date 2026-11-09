@@ -1,0 +1,294 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="container-fluid pb-5">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h4 class="fw-bold text-primary m-0">
+                <i class="fas fa-user-edit me-2"></i>Edit Account
+            </h4>
+            <p class="text-muted small mb-0">Modifying settings for: <strong>{{ edit_user.username }}</strong></p>
+        </div>
+        <a href="/ui/users/list" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="fas fa-arrow-left me-1"></i> Back to List
+        </a>
+    </div>
+
+    <form id="editUserForm">
+        <div class="row g-4">
+            
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 rounded-4">
+                    <div class="card-header bg-white py-3 border-bottom">
+                        <h6 class="m-0 fw-bold text-dark"><i class="fas fa-id-badge me-2 text-primary"></i>Account Identity</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Full Name</label>
+                                <input id="name" class="form-control bg-light border-0 py-2" value="{{ edit_user.name }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Mobile Number</label>
+                                <input id="mobile" type="tel" class="form-control bg-light border-0 py-2" value="{{ edit_user.mobile or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Username</label>
+                                <input id="username" class="form-control bg-light border-0 py-2" value="{{ edit_user.username }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Email Address</label>
+                                <input id="email" class="form-control bg-light border-0 py-2" value="{{ edit_user.email }}" readonly>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Change Password <small class="text-muted">(Leave blank to keep current)</small></label>
+                                <input id="password" type="password" class="form-control bg-light border-0 py-2" placeholder="••••••••">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Account Role</label>
+                                
+                                {% if target_user.role == 'user' %}
+                                    <select name="role" id="role" class="form-select border-primary shadow-sm">
+                                        <option value="user" {% if target_user.role == 'user' %}selected{% endif %}>Standard User</option>
+                                        <option value="reseller">Promote to Reseller</option>
+                                    </select>
+                                    <div class="form-text text-info small">
+                                        <i class="fas fa-info-circle me-1"></i> Standard users can be upgraded to Resellers.
+                                    </div>
+                                {% else %}
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="fas fa-lock text-muted small"></i></span>
+                                        <input type="text" class="form-control bg-light" value="{{ target_user.role|capitalize }}" readonly>
+                                    </div>
+                                    <input type="hidden" name="role" id="role" value="{{ target_user.role }}">
+                                    <div class="form-text text-muted small">
+                                        Role modifications for {{ target_user.role }} accounts are restricted.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if user.role == 'admin' %}
+                <div class="card shadow-sm border-0 rounded-4 mt-4">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold"><i class="fas fa-server me-2 text-warning"></i>Gateway Credentials</h6>
+                        <span class="badge bg-warning-subtle text-warning fw-normal">Admin Only</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-uppercase text-muted">
+                                        <th class="ps-4 py-3" style="width: 80px;">Active</th>
+                                        <th class="py-3">Provider</th>
+                                        <th class="py-3">API Key / Token</th>
+                                        <th class="pe-4 py-3">Agent/Entity ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in providers %}
+                                    {% set creds = (edit_user.provider_credentials or {}).get(p.code, {}) %}
+                                    <tr class="provider-row" data-provider="{{ p.code }}">
+                                        <td class="ps-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="active_provider" value="{{ p.code }}" id="radio_{{ p.code }}" 
+                                                {{ 'checked' if edit_user.active_provider == p.code or (not edit_user.active_provider and loop.first) }}>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <label for="radio_{{ p.code }}" class="fw-bold d-block mb-0" style="cursor: pointer;">{{ p.name }}</label>
+                                            <div class="text-muted extra-small">{{ p.type }}</div>
+                                        </td>
+                                        <td><input class="form-control form-control-sm border-0 bg-light provider-api-key" value="{{ creds.get('api_key', '') }}" placeholder="Paste Key"></td>
+                                        <td class="pe-4"><input class="form-control form-control-sm border-0 bg-light provider-agent-id" value="{{ creds.get('agent_id', '') }}" placeholder="ID"></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 fw-bold"><i class="fas fa-wallet me-2 text-success"></i>Billing Configuration</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="p-3 bg-light rounded-3 border text-center mb-3">
+                            <span class="text-muted small d-block mb-1">Current Balance</span>
+                            <h4 class="fw-bold text-success mb-0">₹{{ edit_user.wallet_balance or 0 }}</h4>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Cost Per Msg (₹)</label>
+                            <div class="input-group">
+                                <input id="per_message_cost" type="number" min="0.01" step="0.01"
+                                       class="form-control py-2 fw-bold"
+                                       value="{{ edit_user.per_message_cost if edit_user.per_message_cost is defined else 1 }}"
+                                       {{ 'readonly' if user.role != 'admin' else '' }}>
+                                {% if user.role != 'admin' %}
+                                <span class="input-group-text bg-light border-start-0 text-muted"><i class="fas fa-lock small"></i></span>
+                                {% endif %}
+                            </div>
+                            <div class="form-text extra-small text-muted">
+                                {{ 'Admin can set a user-specific message rate.' if user.role == 'admin' else 'Only an administrator can change this rate.' }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Credit Expiry</label>
+                            <input type="date" 
+                                   id="credit_expiry"
+                                   name="credit_expiry" 
+                                   class="form-control" 
+                                   value="{{ formatted_expiry }}"> 
+                        </div>
+                        
+                        <div class="form-check form-switch py-2 px-0 d-flex justify-content-between align-items-center border-top mt-3">
+                            <label class="form-check-label small fw-bold" for="refund_enabled">Enable Automated Refund</label>
+                            <input class="form-check-input ms-0" type="checkbox" id="refund_enabled" {{ 'checked' if edit_user.refund_enabled }}>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 rounded-4 bg-dark text-white">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3 small text-uppercase opacity-75">Account Status Controls</h6>
+                        
+                        {% if user.role == 'admin' %}
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-warning">Internal Cutting (%)</label>
+                            <input id="cutting_percent" type="number" min="0" max="100" class="form-control bg-secondary border-0 text-white" value="{{ edit_user.cutting_percent or 0 }}">
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-warning">Cutting Threshold</label>
+                            <input id="cutting_threshold" type="number" min="0" class="form-control bg-secondary border-0 text-white" value="{{ edit_user.cutting_threshold if edit_user.cutting_threshold is defined else 100 }}">
+                            <div class="extra-small mt-1 text-white-50">No cutting is applied when the campaign audience is at or below this value.</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">Account Status</label>
+                            <select id="active" class="form-select bg-secondary border-0 text-white">
+                                <option value="true" {{ 'selected' if edit_user.active }}>Active / Enabled</option>
+                                <option value="false" {{ 'selected' if not edit_user.active }}>Suspended / Inactive</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-2 fw-bold shadow">
+                            <i class="fas fa-save me-2"></i>Update User Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById("editUserForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  
+  if (typeof Swal === 'undefined') {
+      alert("Error: SweetAlert2 library failed to load.");
+      return;
+  }
+
+  const btn = document.getElementById("submitBtn");
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Updating...`;
+
+  const providerConfigs = {};
+  document.querySelectorAll(".provider-row").forEach(row => {
+      const pCode = row.getAttribute("data-provider");
+      const key = row.querySelector(".provider-api-key").value.trim();
+      const aid = row.querySelector(".provider-agent-id").value.trim();
+      if (key || aid) {
+          providerConfigs[pCode] = { api_key: key, agent_id: aid };
+      }
+  });
+
+  const activeProvider = document.querySelector('input[name="active_provider"]:checked')?.value;
+
+  const payload = {
+    name: document.getElementById("name")?.value.trim(),
+    mobile: document.getElementById("mobile")?.value.trim(),
+    role: document.getElementById("role")?.value,
+    provider_credentials: providerConfigs,
+    active_provider: activeProvider, 
+    refund_enabled: document.getElementById("refund_enabled")?.checked || false, 
+    
+    per_message_cost: parseFloat(document.getElementById("per_message_cost")?.value || 1),
+    
+    credit_expiry: document.getElementById("credit_expiry")?.value || null,
+    cutting_percent: parseInt(document.getElementById("cutting_percent")?.value || 0),
+    cutting_threshold: parseInt(document.getElementById("cutting_threshold")?.value || 100),
+    active: document.getElementById("active")?.value === "true"
+  };
+
+  const pwd = document.getElementById("password")?.value;
+  if (pwd) payload.password = pwd;
+
+  try {
+    const userId = "{{ edit_user._id }}";
+    const res = await fetch(`/ui/users/${userId}/edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    if (res.ok) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Update Successful!',
+            text: 'User account settings have been saved.',
+            timer: 2000,
+            showConfirmButton: false,
+            timerProgressBar: true
+        }).then(() => {
+            window.location.href = "/ui/users/list"; 
+        });
+    } else {
+        Swal.fire({
+            icon: 'error',
+            title: 'Update Failed',
+            text: data.detail || "Unable to update user settings.",
+            confirmButtonColor: '#0d6efd'
+        });
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+  } catch (err) {
+    Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Unable to reach the server. Please check your internet.',
+    });
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+});
+</script>
+
+<style>
+    .extra-small { font-size: 0.75rem; }
+    .form-control:focus { box-shadow: none; border: 1px solid #0d6efd; }
+    .card { transition: all 0.3s ease; }
+    .provider-row:hover { background-color: #f8f9fa; }
+    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
+    
+    /* Make readonly inputs look distinct */
+    input[readonly] {
+        cursor: not-allowed;
+        background-color: #f8f9fa !important;
+    }
+</style>
+
+{% endblock %}

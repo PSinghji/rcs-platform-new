@@ -1,0 +1,233 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<style>
+    :root { --rcs-blue: #1a73e8; --phone-border: #202124; }
+    .view-section { background: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; padding: 25px; }
+    .sticky-preview { top: 2rem; position: sticky; }
+    
+    /* Modern Phone Mockup */
+    .phone-mockup { 
+        width: 310px; height: 630px; background: var(--phone-border); border-radius: 40px; 
+        margin: 0 auto; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.15); border: 8px solid #2b2b2b;
+    }
+    .phone-screen { 
+        position: absolute; top: 35px; bottom: 35px; left: 8px; right: 8px; 
+        background: #f8f9fa; border-radius: 4px; overflow-y: auto; display: flex; flex-direction: column; 
+    }
+    .chat-header { background: #fff; border-bottom: 1px solid #eee; position: sticky; top: 0; z-index: 10; }
+    
+    /* RCS Preview Components */
+    .rcs-card { background: white; border-radius: 18px; border: 1px solid #dadce0; overflow: hidden; margin-bottom: 8px; width: 100%; }
+    .rcs-media-container { width: 100%; min-height: 140px; background: #000; overflow: hidden; }
+    .rcs-media { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rcs-title { font-size: 14px; font-weight: 600; color: #202124; margin: 10px 10px 4px 10px; }
+    .rcs-desc { font-size: 12px; color: #5f6368; line-height: 1.4; padding: 0 10px 10px 10px; white-space: pre-wrap; }
+    
+    /* Action Buttons in Preview */
+    .preview-actions-container { display: flex; flex-direction: column; border-top: 1px solid #f1f3f4; }
+    .rcs-chip { 
+        background: white; border: none; color: var(--rcs-blue); 
+        padding: 10px; font-size: 13px; font-weight: 500; 
+        text-align: center; width: 100%; border-bottom: 1px solid #f1f3f4;
+    }
+    .rcs-chip:last-child { border-bottom: none; }
+
+    /* Carousel */
+    .preview-carousel-wrapper { display: flex; gap: 8px; overflow-x: auto; padding: 10px 5px; scroll-snap-type: x mandatory; }
+    .carousel-item-preview { 
+        min-width: 220px; max-width: 220px; scroll-snap-align: start; 
+        flex-shrink: 0; background: white; border-radius: 15px; border: 1px solid #dadce0; overflow: hidden;
+    }
+
+    .badge-status { font-size: 0.7rem; text-transform: uppercase; padding: 5px 12px; }
+    .form-control[readonly] { background-color: #f8f9fa; border-color: #e9ecef; color: #6c757d; cursor: not-allowed; font-size: 13px; }
+    
+    /* Left Side Detailed Card Styling */
+    .card-container { border: 1px solid #e0e0e0; border-left: 5px solid var(--rcs-blue); padding: 20px; margin-bottom: 30px; border-radius: 8px; background: #fff; }
+    .card-label { font-size: 12px; font-weight: 700; color: var(--rcs-blue); margin-bottom: 15px; display: block; text-transform: uppercase; }
+    .button-sub-section { background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px dashed #ddd; margin-top: 15px; }
+</style>
+
+<div class="container-fluid pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <h4 class="fw-bold text-dark mb-0">Template Details View</h4>
+                {% set status = (template.status|default('pending'))|lower %}
+                <span class="badge rounded-pill badge-status 
+                    {% if status == 'approved' %}bg-success{% elif status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                    {{ status|upper }}
+                </span>
+            </div>
+            <p class="text-muted small">Viewing: <strong>{{ template.name }}</strong></p>
+        </div>
+        <a href="/ui/admin/templates/approvals" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to List</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="view-section shadow-sm">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">TEMPLATE NAME</label>
+                        <input type="text" class="form-control" value="{{ template.name }}" readonly>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">TEMPLATE TYPE</label>
+                        <input type="text" class="form-control text-capitalize" value="{{ template.template_type }}" readonly>
+                    </div>
+                </div>
+
+                <div id="fieldsLog">
+                    </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="sticky-preview">
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        <div class="chat-header d-flex align-items-center p-3">
+                            <div class="avatar bg-primary text-white rounded-circle me-2 d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;font-size:10px">B</div>
+                            <div class="fw-bold" style="font-size: 13px;">Business Messenger</div>
+                        </div>
+                        <div id="preview" class="chat-body p-2">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const rawData = `{{ template.content | tojson | safe }}`;
+let CONTENT;
+
+try {
+    CONTENT = JSON.parse(rawData);
+} catch (e) {
+    const cleaned = rawData.replace(/[\u0000-\u001F\u007F-\u009F]/g, function (a) {
+        return '\\u' + ('0000' + a.charCodeAt(0).toString(16)).slice(-4);
+    });
+    CONTENT = JSON.parse(cleaned);
+}
+
+const TYPE = "{{ template.template_type }}";
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderRCS();
+});
+
+function renderMedia(url) {
+    if (!url) return `<div class="rcs-media d-flex align-items-center justify-content-center text-muted small" style="background:#eee;">No Media</div>`;
+    const isVideo = url.toLowerCase().match(/\.(mp4|webm|mov)$/);
+    if (isVideo) return `<video class="rcs-media" autoplay muted loop playsinline><source src="${url}"></video>`;
+    return `<img src="${url}" class="rcs-media" onerror="this.src='https://placehold.co/400x200?text=Image+Not+Found'">`;
+}
+
+// Function to generate button HTML for both preview and left side details
+function getButtonsData(suggestions, isMobilePreview = true) {
+    if (!suggestions || suggestions.length === 0) return "";
+    
+    if (isMobilePreview) {
+        let mobileBtns = '<div class="preview-actions-container">';
+        suggestions.forEach(s => {
+            const label = s.reply ? s.reply.plainText : (s.action ? s.action.plainText : "Button");
+            mobileBtns += `<div class="rcs-chip">${label}</div>`;
+        });
+        return mobileBtns + '</div>';
+    } else {
+        let logBtns = '<div class="button-sub-section"><label class="fw-bold small text-muted mb-2 d-block">CONFIGURED BUTTONS</label><div class="list-group list-group-flush">';
+        suggestions.forEach(s => {
+            let label = "", val = "", type = "";
+            if (s.reply) {
+                label = s.reply.plainText;
+                val = s.reply.postBack.data;
+                type = "Reply";
+            } else if (s.action) {
+                label = s.action.plainText;
+                type = s.action.openUrl ? "URL" : (s.action.dialerAction ? "Call" : "Action");
+                val = s.action.openUrl ? s.action.openUrl.url : (s.action.dialerAction ? s.action.dialerAction.phoneNumber : "");
+            }
+            logBtns += `<div class="list-group-item px-0 border-0 bg-transparent py-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold small text-dark">${label}</span>
+                                <span class="badge bg-light text-primary border" style="font-size:9px">${type}</span>
+                            </div>
+                            <div class="text-muted small text-truncate" style="font-size:10px">${val}</div>
+                        </div>`;
+        });
+        return logBtns + '</div></div>';
+    }
+}
+
+function renderRCS() {
+    const preview = document.getElementById("preview");
+    const fieldsLog = document.getElementById("fieldsLog");
+    let mobileHtml = "";
+    let leftSideHtml = "";
+
+    if (TYPE === "plain") {
+        leftSideHtml = `<div class="card-container">
+                            <span class="card-label">Basic Message</span>
+                            <label class="small fw-bold text-muted">MESSAGE TEXT</label>
+                            <textarea class="form-control mb-3" readonly rows="4">${CONTENT.plainText || ""}</textarea>
+                            ${getButtonsData(CONTENT.suggestions, false)}
+                        </div>`;
+        mobileHtml = `<div class="bg-white rcs-card p-3 shadow-sm mb-2" style="border-radius: 15px 15px 15px 2px;">${CONTENT.plainText || ""}</div>` + getButtonsData(CONTENT.suggestions, true);
+    } 
+    else if (TYPE === "rich") {
+        const card = CONTENT.richCardDetails?.standalone?.content;
+        if(card) {
+            leftSideHtml = `<div class="card-container">
+                                <span class="card-label">Rich Card Content</span>
+                                <label class="small fw-bold text-muted">MEDIA URL</label>
+                                <input type="text" class="form-control mb-3" value="${card.cardMedia?.contentInfo?.fileUrl || ""}" readonly>
+                                <label class="small fw-bold text-muted">CARD TITLE</label>
+                                <input type="text" class="form-control mb-3" value="${card.cardTitle || ""}" readonly>
+                                <label class="small fw-bold text-muted">DESCRIPTION</label>
+                                <textarea class="form-control mb-3" readonly rows="4">${card.cardDescription || ""}</textarea>
+                                ${getButtonsData(card.suggestions, false)}
+                            </div>`;
+            mobileHtml = `<div class="rcs-card shadow-sm">
+                        <div class="rcs-media-container">${renderMedia(card.cardMedia?.contentInfo?.fileUrl)}</div>
+                        <div class="rcs-title">${card.cardTitle || ""}</div>
+                        <div class="rcs-desc">${card.cardDescription || ""}</div>
+                        ${getButtonsData(card.suggestions, true)}
+                    </div>`;
+        }
+    }
+    else if (TYPE === "carousel") {
+        const cards = CONTENT.richCardDetails?.carousel?.contents || [];
+        mobileHtml = `<div class="preview-carousel-wrapper">`;
+        
+        cards.forEach((c, index) => {
+            leftSideHtml += `<div class="card-container">
+                                <span class="card-label">Card 0${index + 1}</span>
+                                <label class="small fw-bold text-muted">MEDIA URL</label>
+                                <input type="text" class="form-control mb-3" value="${c.cardMedia?.contentInfo?.fileUrl || ""}" readonly>
+                                <label class="small fw-bold text-muted">CARD TITLE</label>
+                                <input type="text" class="form-control mb-3" value="${c.cardTitle || ""}" readonly>
+                                <label class="small fw-bold text-muted">DESCRIPTION</label>
+                                <textarea class="form-control mb-3" readonly rows="3">${c.cardDescription || ""}</textarea>
+                                ${getButtonsData(c.suggestions, false)}
+                             </div>`;
+            
+            mobileHtml += `<div class="carousel-item-preview shadow-sm">
+                        <div class="rcs-media-container" style="height:110px;">${renderMedia(c.cardMedia?.contentInfo?.fileUrl)}</div>
+                        <div class="rcs-title text-truncate">${c.cardTitle || ""}</div>
+                        <div class="rcs-desc text-truncate" style="height:40px;">${c.cardDescription || ""}</div>
+                        ${getButtonsData(c.suggestions, true)}
+                    </div>`;
+        });
+        mobileHtml += `</div>`;
+    }
+    
+    fieldsLog.innerHTML = leftSideHtml;
+    preview.innerHTML = mobileHtml;
+}
+</script>
+
+{% endblock %}

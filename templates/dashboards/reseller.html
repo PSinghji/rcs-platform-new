@@ -1,0 +1,177 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<div class="container-fluid pb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark m-0">Reseller Dashboard</h4>
+            <p class="text-muted small mb-0">Welcome back, <strong>{{ user.name }}</strong>.</p>
+        </div>
+        <div class="text-end">
+            <span class="badge bg-soft-primary text-primary px-3 py-2 rounded-pill shadow-sm">
+                <i class="fas fa-calendar-alt me-1"></i> <span id="dashboardDate"></span>
+            </span>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-success border-4">
+                <div class="card-body p-4 text-center text-md-start">
+                    <h6 class="text-muted small text-uppercase fw-bold mb-1">Wallet Balance</h6>
+                    <h2 class="fw-bold mb-0 text-success">{{ "{:,.0f}".format(user.wallet_balance|default(0)) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-primary border-4">
+                <div class="card-body p-4 text-center text-md-start">
+                    <h6 class="text-muted small text-uppercase fw-bold mb-1">Users Managed</h6>
+                    <h2 class="fw-bold mb-0 text-primary">{{ total_users or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-purple border-4">
+                <div class="card-body p-4 text-center text-md-start">
+                    <h6 class="text-muted small text-uppercase fw-bold mb-1">Campaigns Processed</h6>
+                    <h2 class="fw-bold mb-0 text-dark">{{ total_campaigns or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-7">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-muted mb-3"><i class="fas fa-chart-line me-2"></i>Wallet Usage Trend (7 Days)</h6>
+                    <div id="walletLineChart"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold text-muted mb-3"><i class="fas fa-chart-pie me-2"></i>Campaign Performance</h6>
+                    <div id="campaignPieChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-4">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold">Recent Campaign Activity</h5>
+            <a href="/ui/campaigns/list" class="btn btn-sm btn-outline-primary rounded-pill px-3">View All</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="bg-light text-muted small fw-bold text-uppercase">
+                    <tr>
+                        <th class="ps-4 py-3">Campaign Details</th>
+                        <th class="text-center">Status</th>
+                        <th class="pe-4 text-end">Date (IST)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in campaigns %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ c.campaign_name or c.name }}</div>
+                            <div class="text-muted extra-small">ID: {{ c._id|string|truncate(12) }}</div>
+                        </td>
+                        <td class="text-center">
+                            {% set s = c.status|lower %}
+                            <span class="badge rounded-pill px-3 py-2
+                                {% if s == 'completed' %}bg-soft-success text-success
+                                {% elif s in ['pending', 'processing', 'started'] %}bg-soft-warning text-warning
+                                {% else %}bg-soft-info text-info{% endif %}">
+                                {{ c.status|upper }}
+                            </span>
+                        </td>
+                        <td class="pe-4 text-end text-muted small">
+                            {{ c.display_date }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center py-5">
+                            <i class="fas fa-inbox fa-3x text-light mb-3 d-block"></i>
+                            <p class="text-muted">No campaign activity found.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-soft-success { background-color: #e8fadf; }
+    .bg-soft-primary { background-color: #e7f1ff; }
+    .bg-soft-warning { background-color: #fff8e1; }
+    .bg-soft-info { background-color: #e0f7fa; }
+    .border-purple { border-color: #9c27b0 !important; }
+    .extra-small { font-size: 0.75rem; }
+    .card { transition: transform 0.2s ease; }
+    .card:hover { transform: translateY(-3px); }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Wallet Spending Trend Chart
+    var walletData = JSON.parse('{{ wallet_data|tojson|safe if wallet_data else "[]" }}');
+    var walletLabels = JSON.parse('{{ wallet_labels|tojson|safe if wallet_labels else "[]" }}');
+
+    new ApexCharts(document.querySelector("#walletLineChart"), {
+        series: [{ name: "Balance", data: walletData }],
+        chart: { type: 'area', height: 280, toolbar: { show: false } },
+        stroke: { curve: 'smooth', width: 3 },
+        colors: ['#28a745'],
+        xaxis: { categories: walletLabels, labels: { style: { fontSize: '10px' } } },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1 } },
+        dataLabels: { enabled: false }
+    }).render();
+
+    // 2. Campaign Performance Donut Chart
+    new ApexCharts(document.querySelector("#campaignPieChart"), {
+    series: [
+        Number("{{ message_stats.delivered or 0 }}"), 
+        Number("{{ message_stats.read or 0 }}"), 
+        Number("{{ message_stats.clicked or 0 }}"),
+        Number("{{ message_stats.failed or 0 }}")
+    ],
+    chart: { type: 'donut', height: 300 },
+    labels: ['Delivered', 'Read', 'Clicked', 'Failed'],
+    colors: ['#198754', '#0d6efd', '#6f42c1', '#dc3545'], // Green, Blue, Purple, Red
+    plotOptions: {
+        pie: {
+            donut: {
+                labels: {
+                    show: true,
+                    total: {
+                        show: true,
+                        label: 'Total Messages',
+                        formatter: function(w) {
+                            return w.globals.seriesTotals.reduce((a, b) => a + b, 0)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}).render();
+
+    // Set Dashboard Date Display
+    const dateEl = document.getElementById('dashboardDate');
+    if (dateEl) {
+        dateEl.textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<div class="container-fluid pb-5" style="zoom: 0.85;"> 
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold text-dark mb-1">Campaign Performance Reports</h4>
+    <button onclick="window.location.reload()" class="btn btn-sm btn-primary rounded-pill px-4 shadow-sm">
+        <i class="fas fa-sync-alt me-1"></i> Force Refresh
+    </button>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+           <thead class="bg-light">
+           <tr>
+             <th class="ps-4 py-3 small fw-bold text-uppercase text-muted">Campaign Details</th>
+             <th class="text-center py-3 small fw-bold text-uppercase text-muted">Audience</th>
+             <th class="py-3 small fw-bold text-uppercase text-muted" style="min-width: 450px;">Progress</th>
+             <th class="py-3 small fw-bold text-uppercase text-muted text-center">Status</th>
+             <th class="pe-4 py-3 small fw-bold text-uppercase text-muted text-end">Action</th>
+           </tr>
+           </thead>
+          <tbody>
+          {% for c in campaigns %}
+          <tr id="camp-row-{{ c._id }}" 
+              class="campaign-row"
+              data-id="{{ c._id }}"
+              data-status="{{ c.status }}">
+            
+            <td class="ps-4">
+              <div class="fw-bold text-dark">{{ c.campaign_name }}</div>
+              <div class="text-muted extra-small mt-1">{{ c.created_at }}</div>
+            </td>
+          
+            <td class="text-center fw-bold h5" id="total-{{ c._id }}">
+                {{ c.tatak_number|default(c.total_numbers)|default(0) }}
+            </td>
+
+            <td>
+               <div class="progress mb-2" style="height: 20px; background-color: #eee !important; border-radius: 10px; display: flex !important; overflow: hidden;">
+                  <div id="bar-failed-{{ c._id }}" class="progress-bar bg-danger" style="width: 0%"></div>
+                  <div id="bar-sent-{{ c._id }}" class="progress-bar bg-info" style="width: 0%"></div>
+                  <div id="bar-delivered-{{ c._id }}" class="progress-bar bg-success" style="width: 0%"></div>
+                  <div id="bar-read-{{ c._id }}" class="progress-bar bg-primary" style="width: 0%"></div>
+                  <div id="bar-clicked-{{ c._id }}" class="progress-bar bg-purple" style="width: 0%"></div>
+                  <div id="bar-replied-{{ c._id }}" class="progress-bar bg-dark" style="width: 0%"></div>
+               </div>
+               
+               <div class="d-flex justify-content-between fw-bold text-uppercase" style="font-size: 0.7rem;">
+                   <span class="text-purple">Clicks: <span id="num-clicked-{{ c._id }}">0</span></span>
+                   <span class="text-dark">Replied: <span id="num-replied-{{ c._id }}">0</span></span>
+                   <span class="text-primary">Read: <span id="num-read-{{ c._id }}">0</span></span> 
+                   <span class="text-success">Deliv: <span id="num-delivered-{{ c._id }}">0</span></span>
+                   <span class="text-info">Sent: <span id="num-sent-{{ c._id }}">0</span></span>
+                   <span class="text-danger">Fail: <span id="num-failed-{{ c._id }}">0</span></span>
+               </div>
+            </td>
+          
+            <td class="text-center"><div id="status-badge-{{ c._id }}"></div></td>
+          
+            <td class="pe-4 text-end">
+              <a href="/ui/campaigns/view/{{ c._id }}" class="btn btn-sm btn-outline-primary rounded-3">Stats</a>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+    .progress-bar { transition: width 0.8s ease; height: 100%; border: none; }
+    .bg-danger { background-color: #dc3545 !important; }
+    .bg-success { background-color: #198754 !important; }
+    .bg-info { background-color: #0dcaf0 !important; }
+    .bg-primary { background-color: #0d6efd !important; }
+    .bg-purple { background-color: #6f42c1 !important; }
+    .text-purple { color: #6f42c1 !important; }
+    .bg-dark { background-color: #212529 !important; }
+    .text-dark { color: #212529 !important; }
+    .bg-soft-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .bg-soft-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+</style>
+
+<script>
+(function() {
+    // Core update function mapped to API keys: failed, sent, delivered, read, clicked
+    window.renderCampaignRow = function(id, data) {
+        const totalElement = document.getElementById(`total-${id}`);
+        const total = Math.max(parseInt(data.total || (totalElement ? totalElement.innerText : 0)) || 0, 1);
+        
+        const s = {
+            failed: parseInt(data.failed || 0),
+            sent: parseInt(data.sent || 0),
+            delivered: parseInt(data.delivered || 0),
+            read: parseInt(data.read || 0),
+            clicked: parseInt(data.clicked || 0),
+            replied: parseInt(data.replied || 0) // Add this line
+        };
+
+        // const widths = {
+        //     'failed': (s.failed / total) * 100,
+        //     'sent': (Math.max(0, s.sent - s.delivered) / total) * 100,
+        //     'delivered': (Math.max(0, s.delivered - s.read) / total) * 100,
+        //     'read': (Math.max(0, s.read - s.clicked) / total) * 100,
+        //     'clicked': (s.clicked / total) * 100,
+        //     'replied': (s.replied / total) * 100 // Add this line
+        // };
+
+        const widths = {
+            'failed': (s.failed / total) * 100,
+            'sent': (s.sent / total) * 100,
+            'delivered': (s.delivered / total) * 100,
+            'read': (s.read / total) * 100,
+            'clicked': (s.clicked / total) * 100,
+            'replied': (s.replied / total) * 100
+        };
+
+        window.requestAnimationFrame(() => {
+            Object.keys(widths).forEach(key => {
+                const bar = document.getElementById(`bar-${key}-${id}`);
+                if (bar) bar.style.width = widths[key] + '%';
+            });
+
+            Object.keys(s).forEach(key => {
+                const label = document.getElementById(`num-${key}-${id}`);
+                if (label) label.innerText = s[key].toLocaleString();
+            });
+
+            const badge = document.getElementById(`status-badge-${id}`);
+            if (badge) {
+                const status = (data.status || 'processing').toLowerCase();
+                const isFinished = status === 'completed' || (s.sent + s.failed) >= total;
+                badge.innerHTML = isFinished 
+                    ? '<span class="badge bg-soft-success rounded-pill px-3">Completed</span>'
+                    : `<span class="badge bg-soft-warning rounded-pill px-3">${status.toUpperCase()}</span>`;
+            }
+        });
+    };
+
+    const fetchAndUpdate = async (id) => {
+        try {
+            const response = await fetch(`/ui/campaigns/progress/${id}`);
+            if (response.ok) {
+                const liveData = await response.json();
+                renderCampaignRow(id, liveData);
+                return liveData.status;
+            }
+        } catch (e) { console.error("Fetch error for " + id, e); }
+        return null;
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.campaign-row').forEach(async (row) => {
+            const id = row.getAttribute('data-id');
+            const initialStatus = row.getAttribute('data-status');
+
+            // 1. ALWAYS Fetch immediately on load to ensure bars are not zero
+            const currentStatus = await fetchAndUpdate(id);
+
+            // 2. Only start Polling if the campaign is NOT completed
+            if (currentStatus !== 'completed' && initialStatus !== 'completed') {
+                const poll = setInterval(async () => {
+                    const status = await fetchAndUpdate(id);
+                    if (status === 'completed') clearInterval(poll);
+                }, 4000);
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

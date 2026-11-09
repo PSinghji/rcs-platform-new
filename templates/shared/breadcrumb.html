@@ -1,0 +1,6 @@
+<nav class="breadcrumb">
+  {% for crumb in breadcrumbs %}
+    <span>{{ crumb }}</span>
+    {% if not loop.last %} › {% endif %}
+  {% endfor %}
+</nav>

@@ -1,0 +1,197 @@
+{% set path = request.url.path.rstrip('/') %}
+
+<style>
+    /* SIDEBAR ACCORDION STYLES 
+    */
+    .submenu {
+        display: none; /* Hidden by default */
+        list-style: none;
+        padding-left: 0;
+        background: rgba(0, 0, 0, 0.1);
+    }
+    
+    .submenu.show {
+        display: block; /* Shown when 'show' class is added */
+    }
+
+    .has-arrow::after {
+        content: "\F282"; /* Bootstrap bi-chevron-down icon code */
+        font-family: "bootstrap-icons";
+        float: right;
+        transition: transform 0.3s ease;
+        font-size: 0.7rem;
+        padding: 0px 0px 0px 6px;
+    }
+
+    .has-arrow.open::after {
+        transform: rotate(-180deg);
+        padding: 0px 12px 0px 6px;
+    }
+
+    .sidebar-link.active {
+        background: rgba(26, 115, 232, 0.15);
+        color: #fff !important;
+        border-left: 3px solid #1a73e8;
+    }
+    .bi {
+        font-size: 1.1rem;
+        padding: 0px 10px 0px 0px;
+    }
+</style>
+
+<div class="brand-area px-4 py-4 d-flex align-items-center" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+    <div class="shadow-lg me-3 d-flex align-items-center justify-content-center rounded-3" 
+         style="width: 40px; height: 40px; background: var(--primary-gradient);">
+        <i class="bi bi-lightning-charge-fill text-white fs-5"></i>
+    </div>
+    <div>
+        <h6 class="text-white fw-bold mb-0" style="letter-spacing: -0.5px;">RCS Hub</h6>
+        <span class="text-muted small" style="font-size: 11px;">v2.0 Platform</span>
+    </div>
+</div>
+
+<div class="nav-wrapper flex-grow-1 overflow-auto mt-3 custom-scrollbar" style="scrollbar-width: none;">
+    
+    <div class="nav-section">Main Menu</div>
+    
+    <a href="/ui/{{ user.role }}/dashboard" class="sidebar-link {% if path == '/ui/' + user.role + '/dashboard' %}active{% endif %}">
+        <i class="bi bi-grid-1x2-fill"></i> <span>Dashboard</span>
+    </a>
+
+    {# ================= MANAGEMENT SECTION ================= #}
+    {% if user.role in ['admin', 'reseller'] %}
+        <div class="nav-section">Management</div>
+        
+        <a href="javascript:void(0)" 
+           class="sidebar-link has-arrow {% if '/users' in path or '/wallet/manage' in path or '/approvals' in path %}open{% endif %}" 
+           onclick="toggleSub(this)">
+            <i class="bi bi-people-fill"></i> <span>User Control</span>
+        </a>
+        <ul class="submenu {% if '/users' in path or '/wallet/manage' in path or '/approvals' in path %}show{% endif %}">
+            <li><a href="/ui/users/list" class="sidebar-link ps-4 {% if path == '/ui/users/list' %}active{% endif %}">
+                <i class="bi bi-dot"></i> <span>All Users</span>
+            </a></li>
+            <li><a href="/ui/users/create" class="sidebar-link ps-4 {% if path == '/ui/users/create' %}active{% endif %}">
+                <i class="bi bi-dot"></i> <span>Create Account</span>
+            </a></li>
+            <li><a href="/ui/wallet/manage" class="sidebar-link ps-4 {% if path == '/ui/wallet/manage' %}active{% endif %}">
+                <i class="bi bi-dot"></i> <span>Wallet Manager</span>
+            </a></li>
+            
+            {% if user.role == 'admin' %}
+                <li><a href="/ui/admin/templates/approvals" class="sidebar-link ps-4 {% if '/approvals' in path %}active{% endif %}">
+                    <i class="bi bi-dot"></i> <span>Approvals</span>
+                </a></li>
+                <li><a href="/ui/admin/providers" class="sidebar-link ps-4 {% if '/providers' in path %}active{% endif %}">
+                    <i class="bi bi-dot"></i> <span>Gateway Config</span>
+                </a></li>
+                <li><a href="/ui/admin/report-adjustments" class="sidebar-link ps-4 {% if '/report-adjustments' in path %}active{% endif %}">
+                    <i class="bi bi-dot"></i> <span>Report Adjustment</span>
+                </a></li>
+            {% endif %}
+        </ul>
+    {% endif %}
+
+    {# ================= STUDIO SECTION ================= #}
+    <div class="nav-section">Messaging Studio</div>
+    
+    {# PARENT: DESIGN CENTER #}
+    <a href="javascript:void(0)" 
+       class="sidebar-link has-arrow {% if '/templates' in path %}open{% endif %}" 
+       onclick="toggleSub(this)">
+        <i class="bi bi-palette-fill"></i> <span>Templates Mang.</span>
+    </a>
+    
+    <ul class="submenu {% if '/templates' in path %}show{% endif %}">
+        <li>
+             <a href="/ui/templates/create" 
+                class="sidebar-link {% if path == '/ui/templates/create' %}active{% endif %}">
+                <i class="bi bi-plus-circle-dotted"></i> <span>New Template</span>
+             </a>
+         </li>
+         <li>
+             <a href="/ui/templates/list" 
+                class="sidebar-link {% if path == '/ui/templates/list' %}active{% endif %}">
+                <i class="bi bi-folder2-open"></i> <span>Template List</span>
+             </a>
+         </li>
+    </ul>
+
+    {# PARENT: CAMPAIGNS #}
+    <a href="javascript:void(0)" 
+       class="sidebar-link has-arrow {% if '/campaigns' in path %}open{% endif %}" 
+       onclick="toggleSub(this)">
+        <i class="bi bi-send-fill"></i> <span>Campaigns</span>
+    </a>
+    
+    <ul class="submenu {% if '/campaigns' in path %}show{% endif %}">
+        <li>
+            <a href="/ui/campaigns/create" 
+               class="sidebar-link {% if path == '/ui/campaigns/create' %}active{% endif %}">
+               <i class="bi bi-megaphone"></i> <span>Launch Campaign</span>
+            </a>
+        </li>
+        <li>
+            <a href="/ui/campaigns/list" 
+               class="sidebar-link {% if path == '/ui/campaigns/list' %}active{% endif %}">
+               <i class="bi bi-graph-up"></i> <span>Reports</span>
+            </a>
+        </li>
+    </ul>
+
+    {# ================= FINANCE SECTION ================= #}
+    <div class="nav-section">Finance</div>
+    <a href="/ui/wallet/history/{{ user._id }}" class="sidebar-link {% if '/history' in path %}active{% endif %}">
+        <i class="bi bi-receipt"></i> <span>Transactions</span>
+    </a>
+    <a href="/ui/profile" class="sidebar-link {% if path == '/ui/profile' %}active{% endif %}">
+        <i class="bi bi-gear-wide-connected"></i> <span>Settings</span>
+    </a>
+
+    {# ================= API SECTION — AVAILABLE TO ALL ROLES ================= #}
+    <div class="nav-section">Integration</div>
+    <a href="/ui/api" class="sidebar-link {% if path == '/ui/api' %}active{% endif %}">
+        <i class="bi bi-braces"></i> <span>API</span>
+    </a>
+
+</div>
+
+<div class="p-3 mt-auto" style="border-top: 1px solid rgba(255,255,255,0.05);">
+    <div class="p-3 rounded-3" style="background: rgba(255,255,255,0.05);">
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <div class="bg-success rounded-circle me-2" style="width: 8px; height: 8px;"></div>
+                <span class="text-light small">System Online</span>
+            </div>
+            <a href="javascript:void(0)" onclick="logout()" class="text-muted hover-white" title="Logout"><i class="bi bi-power"></i></a>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * Toggle Sub-Menu (Expand/Collapse) logic
+ */
+function toggleSub(element) {
+    const submenu = element.nextElementSibling;
+    
+    // Toggle the arrow icon rotation
+    element.classList.toggle('open');
+    
+    // Toggle the visible state of the menu
+    if (submenu && submenu.classList.contains('submenu')) {
+        submenu.classList.toggle('show');
+    }
+    
+    // Optional: Accordion effect - close other open menus
+    const allArrows = document.querySelectorAll('.has-arrow');
+    const allMenus = document.querySelectorAll('.submenu');
+    
+    allArrows.forEach((arrow, index) => {
+        if (arrow !== element) {
+            arrow.classList.remove('open');
+            allMenus[index].classList.remove('show');
+        }
+    });
+}
+</script>

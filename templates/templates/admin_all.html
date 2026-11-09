@@ -1,0 +1,223 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+{% if user.role != "admin" %}
+  <div class="alert alert-danger">
+    You are not authorized to access this page.
+  </div>
+{% else %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>All Templates</h4>
+  <span class="text-muted small">
+    View and manage all templates created by users, resellers, and admin
+  </span>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Requested By</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th class="text-end" width="280">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        {% if templates %}
+          {% for t in templates %}
+          <tr>
+            <td class="fw-semibold">{{ t.name }}</td>
+
+            <td>
+              <span class="badge bg-secondary text-uppercase">
+                {{ t.template_type }}
+              </span>
+            </td>
+
+            <td class="text-muted small">
+              {{ t.owner_name }} ({{ t.owner_role }})
+            </td>
+
+            <td>
+              {% if t.status == "pending" %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% elif t.status == "approved" %}
+                <span class="badge bg-success">Approved</span>
+              {% else %}
+                <span class="badge bg-danger">Rejected</span>
+                {% if t.admin_comment %}
+                  <div class="text-danger small mt-1">
+                    {{ t.admin_comment }}
+                  </div>
+                {% endif %}
+              {% endif %}
+            </td>
+
+            <td class="text-muted small">
+              {{ t.created_at }}
+            </td>
+
+            <td class="text-end">
+              <button
+                class="btn btn-sm btn-outline-primary"
+                onclick="previewTemplate('{{ t.id }}')">
+                Preview T
+              </button>
+
+              {% if t.status == "pending" %}
+                <button
+                  class="btn btn-sm btn-success"
+                  onclick="approveTemplate('{{ t.id }}')">
+                  Approve
+                </button>
+
+                <button
+                  class="btn btn-sm btn-danger"
+                  onclick="rejectTemplate('{{ t.id }}')">
+                  Reject
+                </button>
+              {% else %}
+                <span class="text-muted small ms-2">
+                  No action
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No templates found.
+            </td>
+          </tr>
+        {% endif %}
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ================= PREVIEW MODAL ================= -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Template Preview</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-center">
+          <div id="previewBody"
+               style="width:360px;background:#f5f5f5;border-radius:16px;padding:12px">
+            Loading preview...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ADMIN SCRIPTS ================= -->
+<script>
+function approveTemplate(id) {
+  if (!confirm("Approve this template?")) return;
+
+  fetch(`/admin/templates/${id}/approve`, {
+    method: "POST"
+  }).then(() => location.reload());
+}
+
+function rejectTemplate(id) {
+  const comment = prompt("Reason for rejection:");
+  if (!comment) return;
+
+  fetch(`/admin/templates/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ comment })
+  }).then(() => location.reload());
+}
+
+function previewTemplate(id) {
+  fetch(`/ui/templates/preview/${id}`)
+    .then(r => r.json())
+    .then(data => {
+      const content = data.content;
+      const box = document.getElementById("previewBody");
+
+      // Plain text
+      if (content.data?.content?.plainText) {
+        box.innerHTML = `
+          <div class="bg-white rounded p-3">
+            ${content.data.content.plainText}
+          </div>`;
+      }
+
+      // Rich card
+      else if (content.data?.content?.richCardDetails?.standalone) {
+        const card =
+          content.data.content.richCardDetails.standalone.content;
+
+        box.innerHTML = `
+          <div class="bg-white rounded shadow-sm overflow-hidden">
+            ${renderMedia(card.cardMedia)}
+            <div class="p-3">
+              <h6 class="fw-bold">${card.cardTitle || ""}</h6>
+              <p class="text-muted small">
+                ${card.cardDescription || ""}
+              </p>
+            </div>
+          </div>`;
+      }
+
+      // Carousel
+      else if (content.data?.content?.richCardDetails?.carousel) {
+        const cards =
+          content.data.content.richCardDetails.carousel.contents;
+
+        box.innerHTML = `
+          <div class="d-flex gap-2 overflow-auto">
+            ${cards.map(c => `
+              <div class="bg-white rounded shadow-sm" style="min-width:260px">
+                ${renderMedia(c.content.cardMedia)}
+                <div class="p-2">
+                  <h6 class="fw-bold">${c.content.cardTitle || ""}</h6>
+                  <p class="small text-muted">
+                    ${c.content.cardDescription || ""}
+                  </p>
+                </div>
+              </div>
+            `).join("")}
+          </div>`;
+      }
+
+      else {
+        box.innerHTML =
+          `<p class="text-danger">Unsupported template format</p>`;
+      }
+
+      new bootstrap.Modal(
+        document.getElementById("previewModal")
+      ).show();
+    });
+}
+
+function renderMedia(media) {
+  if (!media?.contentInfo?.fileUrl) return "";
+  const url = media.contentInfo.fileUrl;
+
+  if (url.match(/\.(mp4|webm)$/i)) {
+    return `<video controls class="w-100"><source src="${url}"></video>`;
+  }
+  return `<img src="${url}" class="w-100">`;
+}
+</script>
+
+{% endif %}
+{% endblock %}

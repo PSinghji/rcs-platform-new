@@ -1,0 +1,232 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/styles/choices.min.css">
+<div class="container-fluid pb-5">
+  <div class="mb-4">
+    <h3 class="fw-bold mb-1">Campaign Report Adjustment</h3>
+    <p class="text-muted mb-0">Set the exact failed and success percentages for a completed campaign. The page automatically converts messages in the required direction.</p>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-7">
+      <div class="card">
+        <div class="card-body p-4">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">User</label>
+            <select id="userId" class="form-select">
+              <option value="">Select user</option>
+              {% for item in managed_users %}
+              <option value="{{ item._id }}">{{ item.name or item.username }} ({{ item.username }}) — {{ item.role }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Campaign date from</label>
+              <input id="dateFrom" type="date" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Campaign date to</label>
+              <input id="dateTo" type="date" class="form-control">
+            </div>
+            <div class="col-12">
+              <button id="clearDatesButton" type="button" class="btn btn-sm btn-outline-secondary">Clear date filter</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Campaign</label>
+            <select id="campaignId" class="form-select" disabled>
+              <option value="">Select a user first</option>
+            </select>
+            <div class="form-text">Only completed campaigns can be adjusted.</div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Failure percentage</label>
+            <div class="input-group">
+              <input id="failurePercent" type="number" min="0" max="100" step="0.01" class="form-control" placeholder="Example: 31">
+              <span class="input-group-text">%</span>
+            </div>
+          </div>
+          <button id="previewButton" class="btn btn-primary px-4" disabled>
+            <i class="bi bi-eye me-1"></i> Preview Changes
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-5">
+      <div id="previewCard" class="card d-none">
+        <div class="card-body p-4">
+          <h5 class="fw-bold mb-3">Preview</h5>
+          <div id="previewDetails"></div>
+          <div class="alert alert-warning mt-3 mb-3">
+            This action changes message statuses and reconciles the campaign counters. Always review the direction and totals before confirming.
+          </div>
+          <button id="applyButton" class="btn btn-danger w-100">
+            <i class="bi bi-check-circle me-1"></i> Confirm and Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/choices.js@11.1.0/public/assets/scripts/choices.min.js"></script>
+<script>
+const userSelect = document.getElementById('userId');
+const campaignSelect = document.getElementById('campaignId');
+const dateFrom = document.getElementById('dateFrom');
+const dateTo = document.getElementById('dateTo');
+const clearDatesButton = document.getElementById('clearDatesButton');
+const percentInput = document.getElementById('failurePercent');
+const previewButton = document.getElementById('previewButton');
+const previewCard = document.getElementById('previewCard');
+const previewDetails = document.getElementById('previewDetails');
+const applyButton = document.getElementById('applyButton');
+let lastPreview = null;
+const userChoices = new Choices(userSelect, {
+  searchEnabled: true,
+  searchPlaceholderValue: 'Type user name or username',
+  itemSelectText: '',
+  shouldSort: false
+});
+const campaignChoices = new Choices(campaignSelect, {
+  searchEnabled: true,
+  searchPlaceholderValue: 'Type campaign name',
+  itemSelectText: '',
+  shouldSort: false
+});
+
+function selectedPayload() {
+  return {
+    user_id: userSelect.value,
+    campaign_id: campaignSelect.value,
+    failure_percent: Number(percentInput.value)
+  };
+}
+
+function updateButtonState() {
+  previewButton.disabled = !(userSelect.value && campaignSelect.value && percentInput.value !== '');
+}
+
+function invalidatePreview() {
+  lastPreview = null;
+  previewCard.classList.add('d-none');
+  previewDetails.innerHTML = '';
+  updateButtonState();
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+
+async function loadCampaigns() {
+  campaignChoices.disable();
+  campaignChoices.clearChoices();
+  campaignChoices.setChoices([{value: '', label: 'Loading campaigns...', disabled: true}], 'value', 'label', true);
+  invalidatePreview();
+  if (!userSelect.value) {
+    campaignChoices.clearChoices();
+    campaignChoices.setChoices([{value: '', label: 'Select a user first', disabled: true}], 'value', 'label', true);
+    return;
+  }
+  try {
+    const params = new URLSearchParams({user_id: userSelect.value});
+    if (dateFrom.value) params.set('date_from', dateFrom.value);
+    if (dateTo.value) params.set('date_to', dateTo.value);
+    const data = await requestJson(`/ui/admin/report-adjustments/campaigns?${params.toString()}`);
+    const choices = [{value: '', label: data.items.length ? 'Select campaign' : 'No campaigns found', disabled: true, selected: true}]
+      .concat(data.items.map(item => ({
+        value: item.id,
+        label: `${item.campaign_name} — Audience ${item.total_numbers.toLocaleString()} — ${item.status}`,
+        disabled: item.status !== 'completed'
+      })));
+    campaignChoices.clearChoices();
+    campaignChoices.setChoices(choices, 'value', 'label', true);
+    campaignChoices.enable();
+  } catch (error) {
+    campaignChoices.clearChoices();
+    campaignChoices.setChoices([{value: '', label: 'Unable to load campaigns', disabled: true}], 'value', 'label', true);
+    Swal.fire('Error', error.message, 'error');
+  }
+}
+
+userSelect.addEventListener('change', loadCampaigns);
+dateFrom.addEventListener('change', loadCampaigns);
+dateTo.addEventListener('change', loadCampaigns);
+clearDatesButton.addEventListener('click', () => {
+  dateFrom.value = '';
+  dateTo.value = '';
+  loadCampaigns();
+});
+
+campaignSelect.addEventListener('change', invalidatePreview);
+percentInput.addEventListener('input', invalidatePreview);
+
+previewButton.addEventListener('click', async () => {
+  previewButton.disabled = true;
+  try {
+    const data = await requestJson('/ui/admin/report-adjustments/preview', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(selectedPayload())
+    });
+    lastPreview = data;
+    const actionClass = data.direction === 'failed_to_delivered' ? 'text-success' : data.direction === 'delivered_to_failed' ? 'text-danger' : 'text-muted';
+    previewDetails.innerHTML = `
+      <dl class="row mb-0">
+        <dt class="col-7">Campaign</dt><dd class="col-5 text-end">${data.campaign_name}</dd>
+        <dt class="col-7">Audience</dt><dd class="col-5 text-end">${data.total_numbers.toLocaleString()}</dd>
+        <dt class="col-7">Required action</dt><dd class="col-5 text-end fw-bold ${actionClass}">${data.action_label}</dd>
+        <dt class="col-7">Current failed</dt><dd class="col-5 text-end">${data.current_failed.toLocaleString()}</dd>
+        <dt class="col-7">Current success</dt><dd class="col-5 text-end">${data.current_success.toLocaleString()}</dd>
+        <dt class="col-7">Target failed</dt><dd class="col-5 text-end text-danger fw-bold">${data.target_failed.toLocaleString()}</dd>
+        <dt class="col-7">Target success</dt><dd class="col-5 text-end text-success fw-bold">${data.target_success.toLocaleString()}</dd>
+        <dt class="col-7">Messages to change</dt><dd class="col-5 text-end fw-bold ${actionClass}">${data.messages_to_change.toLocaleString()}</dd>
+        <dt class="col-7">Projected delivered</dt><dd class="col-5 text-end text-success fw-bold">${data.projected_delivered.toLocaleString()}</dd>
+      </dl>`;
+    applyButton.classList.toggle('btn-danger', data.direction === 'delivered_to_failed');
+    applyButton.classList.toggle('btn-success', data.direction !== 'delivered_to_failed');
+    applyButton.innerHTML = data.direction === 'none'
+      ? '<i class="bi bi-check-circle me-1"></i> Reconcile Counters'
+      : '<i class="bi bi-check-circle me-1"></i> Confirm and Apply';
+    previewCard.classList.remove('d-none');
+  } catch (error) {
+    previewCard.classList.add('d-none');
+    previewDetails.innerHTML = '';
+    Swal.fire('Cannot preview', error.message, 'error');
+  } finally {
+    updateButtonState();
+  }
+});
+
+applyButton.addEventListener('click', async () => {
+  if (!lastPreview) return;
+  const confirmationText = lastPreview.direction === 'failed_to_delivered'
+    ? 'Failed messages will be restored as artificial delivered messages.'
+    : lastPreview.direction === 'delivered_to_failed'
+    ? 'Delivered messages will be changed to failed.'
+    : 'Message statuses already match; campaign counters will be reconciled.';
+  const confirmation = await Swal.fire({
+    title: 'Apply report adjustment?',
+    text: confirmationText,
+    icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'Yes, apply changes'
+  });
+  if (!confirmation.isConfirmed) return;
+  applyButton.disabled = true;
+  Swal.fire({title: 'Applying changes...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+  try {
+    const data = await requestJson('/ui/admin/report-adjustments/apply', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(selectedPayload())
+    });
+    await Swal.fire('Completed', `${data.message}. Failed: ${data.failed_count.toLocaleString()}, Delivered: ${data.delivered_count.toLocaleString()}`, 'success');
+    window.location.reload();
+  } catch (error) {
+    Swal.fire('Update failed', error.message, 'error');
+    applyButton.disabled = false;
+  }
+});
+</script>
+{% endblock %}

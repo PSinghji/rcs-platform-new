@@ -1,0 +1,362 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+{% if user.role != "admin" %}
+  <div class="alert alert-danger m-4">
+    <i class="fas fa-exclamation-triangle me-2"></i> You are not authorized to access this page.
+  </div>
+{% else %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-primary m-0">Template Approvals</h4>
+            <p class="text-muted small mb-0">Review, approve, or reject message templates.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="badge bg-white text-dark border shadow-sm px-3 py-2 rounded-pill">
+                Total: {{ templates|length }}
+            </span>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        
+        <div class="card-header bg-white py-3 border-0 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <h6 class="m-0 fw-bold text-dark"><i class="fas fa-layer-group me-2 text-primary"></i>Template List</h6>
+            
+            <div class="input-group shadow-sm" style="max-width: 300px; border-radius: 50px; overflow: hidden;">
+                <span class="input-group-text bg-light border-0 ps-3"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="tableSearch" class="form-control bg-light border-0 small fw-bold text-muted" placeholder="Search name, requester...">
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="templateTable">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 py-3 text-uppercase small fw-bold text-muted">Created Date</th>
+                            <th class="py-3 text-uppercase small fw-bold text-muted">Template Name</th>
+                            <th class="py-3 text-uppercase small fw-bold text-muted">Requested By</th>
+                            <th class="py-3 text-uppercase small fw-bold text-muted text-center">Status</th>
+                            <th class="pe-4 py-3 text-uppercase small fw-bold text-muted text-end" style="min-width: 200px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        {% if templates %}
+                            {% for t in templates %}
+                            <tr class="template-row border-bottom-0">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-light text-secondary rounded p-2 me-2 d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                            <i class="bi bi-calendar4"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark local-time" 
+                                                 data-utc="{{ t.created_at.isoformat() if t.created_at else '' }}Z">
+                                                --/--
+                                            </div>
+                                            <div class="extra-small text-muted local-date">--:--</div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="fw-bold text-dark">{{ t.name }}</div>
+                                    <div class="extra-small text-muted">ID: {{ t.id }}</div>
+                                </td>
+
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-xs bg-primary-subtle text-primary rounded-circle me-2 d-flex align-items-center justify-content-center fw-bold" style="width: 30px; height: 30px; font-size: 12px;">
+                                            {{ t.requested_by_name[0]|upper }}
+                                        </div>
+                                        <div>
+                                            <div class="small fw-bold">{{ t.requested_by_name }}</div>
+                                            <div class="extra-small text-muted">{{ t.owner_role|capitalize }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td class="text-center">
+                                    {% if t.status == "pending" %}
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3">Pending</span>
+                                    {% elif t.status == "approved" %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3">Approved</span>
+                                    {% else %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3">Rejected</span>
+                                        {% if t.admin_comment %}
+                                            <i class="bi bi-info-circle text-danger ms-1" data-bs-toggle="tooltip" title="{{ t.admin_comment }}"></i>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a href="/ui/templates/edit/{{ t.id }}" 
+                                           class="btn btn-sm btn-light border shadow-sm text-primary" 
+                                           title="Preview">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+
+                                        {% if t.status == "pending" %}
+                                            <button class="btn btn-sm btn-soft-success" 
+                                                    onclick="approveTemplate('{{ t.id }}')" 
+                                                    title="Approve">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                            
+                                            <button class="btn btn-sm btn-soft-danger" 
+                                                    onclick="rejectTemplate('{{ t.id }}')" 
+                                                    title="Reject">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+
+                                        {% elif t.status == "approved" %}
+                                            <button class="btn btn-sm btn-soft-danger" 
+                                                    onclick="rejectTemplate('{{ t.id }}')" 
+                                                    title="Revoke Approval">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        
+                                        {% else %}
+                                            <button class="btn btn-sm btn-light text-muted border-0" disabled>
+                                                <i class="bi bi-dash-lg"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-5">
+                                    <div class="text-muted opacity-50">
+                                        <i class="bi bi-inbox display-1"></i>
+                                        <p class="mt-2 fw-bold">No templates found.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white border-0 py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted small fw-bold" id="paginationInfo">Loading data...</div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 gap-1" id="paginationControls"></ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Template Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2 pb-4">
+        <div class="d-flex justify-content-center bg-light rounded-4 p-3 border">
+            <div id="previewBody" class="bg-white shadow-sm" style="width: 320px; min-height: 200px; border-radius: 16px; padding: 12px; overflow: hidden;">
+                Loading preview...
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+    /* Button Styles */
+    .btn-soft-success { background-color: #d1e7dd; color: #0f5132; border: none; }
+    .btn-soft-success:hover { background-color: #198754; color: #fff; transform: translateY(-2px); }
+    .btn-soft-danger { background-color: #f8d7da; color: #842029; border: none; }
+    .btn-soft-danger:hover { background-color: #dc3545; color: #fff; transform: translateY(-2px); }
+    
+    /* Pagination */
+    .page-link { color: var(--text-muted, #64748b); background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .page-link:hover { background: #e2e8f0; color: var(--accent-color, #3b82f6); }
+    .page-item.active .page-link { background: var(--accent-color, #3b82f6); color: #fff; border-color: transparent; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. TIMEZONE FIX
+    document.querySelectorAll('.local-time').forEach(el => {
+        const utcStr = el.getAttribute('data-utc');
+        if (utcStr && utcStr !== 'Z') {
+            try {
+                const date = new Date(utcStr);
+                el.innerText = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+                const timeEl = el.nextElementSibling;
+                if(timeEl) timeEl.innerText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch(e) {}
+        }
+    });
+
+    // 2. PAGINATION & SEARCH LOGIC
+    const searchInput = document.getElementById('tableSearch');
+    const tbody = document.getElementById('tableBody');
+    const allRows = Array.from(tbody.querySelectorAll('tr.template-row'));
+    const paginationControls = document.getElementById('paginationControls');
+    const paginationInfo = document.getElementById('paginationInfo');
+
+    let currentPage = 1;
+    const rowsPerPage = 10;
+    let filteredRows = [...allRows];
+
+    function renderTable() {
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+        allRows.forEach(row => row.style.display = 'none');
+        
+        const rowsToShow = filteredRows.slice(start, end);
+        if (rowsToShow.length > 0) {
+            rowsToShow.forEach(row => row.style.display = '');
+            paginationInfo.innerText = `Showing ${start + 1} to ${Math.min(end, filteredRows.length)} of ${filteredRows.length}`;
+        } else {
+            paginationInfo.innerText = "No templates match your search.";
+        }
+        renderPagination();
+    }
+
+    function renderPagination() {
+        paginationControls.innerHTML = '';
+        const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+        if (totalPages <= 1) return;
+
+        const createBtn = (text, page, isActive, isDisabled) => {
+            const li = document.createElement('li');
+            li.className = `page-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+            li.innerHTML = `<button class="page-link" onclick="goToPage(${page})">${text}</button>`;
+            return li;
+        };
+
+        paginationControls.appendChild(createBtn('<', currentPage - 1, false, currentPage === 1));
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                paginationControls.appendChild(createBtn(i, i, i === currentPage));
+            } else if (i === currentPage - 2 || i === currentPage + 2) {
+                const dots = document.createElement('li');
+                dots.className = 'page-item disabled';
+                dots.innerHTML = '<span class="page-link border-0">...</span>';
+                paginationControls.appendChild(dots);
+            }
+        }
+        paginationControls.appendChild(createBtn('>', currentPage + 1, false, currentPage === totalPages));
+    }
+
+    window.goToPage = function(page) { currentPage = page; renderTable(); };
+
+    searchInput.addEventListener('keyup', function() {
+        const term = this.value.toLowerCase().trim();
+        filteredRows = allRows.filter(row => row.innerText.toLowerCase().includes(term));
+        currentPage = 1;
+        renderTable();
+    });
+
+    renderTable(); 
+});
+
+// ================= ACTIONS =================
+
+
+// Helper: Renders Buttons + Underlying Links/Numbers
+function renderPreviewButtons(suggestions) {
+    if (!suggestions || !suggestions.length) return "";
+    let html = '<div class="d-grid gap-2 mt-2">';
+    
+    suggestions.forEach(s => {
+        // 1. Get Label
+        const label = s.reply?.displayText || s.action?.displayText || "Button";
+        
+        // 2. Extract Hidden Details (URL / Phone)
+        let hiddenDetail = "";
+        let iconClass = "";
+
+        if (s.action?.openUrl?.url) {
+            hiddenDetail = s.action.openUrl.url;
+            iconClass = "bi-link-45deg";
+        } else if (s.action?.dialerAction?.phoneNumber) {
+            hiddenDetail = s.action.dialerAction.phoneNumber;
+            iconClass = "bi-telephone";
+        }
+
+        // 3. Build Button HTML
+        html += `
+            <div class="btn btn-outline-primary btn-sm text-center p-2 rounded-3" style="pointer-events: none; white-space: normal;">
+                <div class="fw-bold" style="font-size: 0.75rem;">${label}</div>
+                ${hiddenDetail ? `
+                    <div class="border-top mt-1 pt-1 text-muted extra-small d-block text-truncate" style="font-size: 0.65rem; opacity: 0.8;">
+                        <i class="bi ${iconClass} me-1"></i>${hiddenDetail}
+                    </div>
+                ` : ''}
+            </div>`;
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+// 2. APPROVE
+async function approveTemplate(id) {
+    const result = await Swal.fire({
+        title: 'Approve Template?',
+        text: "This template will be available for campaigns immediately.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        confirmButtonText: 'Yes, Approve'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            const response = await fetch(`/admin/templates/${id}/approve`, { method: "POST" });
+            if(response.ok) {
+                Swal.fire('Approved!', 'The template has been approved.', 'success').then(() => location.reload());
+            } else {
+                Swal.fire('Error', 'Failed to approve template.', 'error');
+            }
+        } catch (e) { Swal.fire('Error', 'Network error.', 'error'); }
+    }
+}
+
+// 3. REJECT
+async function rejectTemplate(id) {
+    const { value: comment } = await Swal.fire({
+        title: 'Reject Template',
+        input: 'text',
+        inputLabel: 'Reason for rejection',
+        inputPlaceholder: 'e.g. Content violates policy',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Reject'
+    });
+
+    if (comment) {
+        try {
+            const response = await fetch(`/admin/templates/${id}/reject`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ comment })
+            });
+            
+            if(response.ok) {
+                Swal.fire('Rejected', 'Template has been rejected.', 'success').then(() => location.reload());
+            } else {
+                Swal.fire('Error', 'Failed to reject template.', 'error');
+            }
+        } catch (e) { Swal.fire('Error', 'Network error.', 'error'); }
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<div class="container-fluid pb-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="fw-bold text-dark m-0">{{ campaign.campaign_name }}</h4>
+      <p class="text-muted small mb-0">Audience: <strong>{{ campaign.total_numbers }}</strong></p>
+      <p class="text-muted small mb-0">Template: <strong>{{ campaign.template_name|default('-', true) }}</strong></p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/ui/campaigns/export/{{ campaign._id }}?status={{status_filter or ''}}" class="btn btn-success rounded-pill px-3 shadow-sm">
+        <i class="fas fa-file-excel me-1"></i> Export Full Report
+      </a>
+      <a href="/ui/campaigns/list" class="btn btn-outline-secondary rounded-pill px-3">Back</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4 text-center">
+    {% for label, key, color in [
+        ('SENT', 'submitted_count', 'info'), 
+        ('DELIVERED', 'delivered_count', 'success'), 
+        ('READ', 'read_count', 'primary'), 
+        ('CLICKED', 'clicked_count', 'warning'),
+        ('REPLIED', 'replied_count', 'dark'),
+        ('FAILED', 'failed_count', 'danger')
+    ] %}
+    <div class="col-md-2"> <div class="card border-0 shadow-sm rounded-4 border-bottom border-{{color}} border-4">
+        <div class="card-body px-1">
+          <div class="text-muted small fw-bold">{{ label }}</div>
+          <h3 class="fw-bold mb-0 {% if color == 'warning' %}text-dark{% else %}text-{{color}}{% endif %}">
+              {{ campaign[key]|default(0) }}
+          </h3>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header bg-white py-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="btn-group btn-group-sm p-1 bg-light rounded-pill">
+          <a href="?limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if not status_filter %}btn-primary text-white shadow-sm{% endif %}">All</a>
+          <a href="?status=submitted&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'submitted' %}btn-primary text-white shadow-sm{% endif %}">Sent</a>
+          <a href="?status=delivered&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'delivered' %}btn-primary text-white shadow-sm{% endif %}">Delivered</a>
+          <a href="?status=read&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'read' %}btn-primary text-white shadow-sm{% endif %}">Read</a>
+          <a href="?status=clicked&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'clicked' %}btn-primary text-white shadow-sm{% endif %}">Clicked</a>
+          <a href="?status=replied&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'replied' %}btn-primary text-white shadow-sm{% endif %}">Replied</a>
+          <a href="?status=failed&limit={{limit}}&search={{search_query or ''}}" class="btn rounded-pill {% if status_filter == 'failed' %}btn-primary text-white shadow-sm{% endif %}">Failed</a>
+        </div>
+
+        <form class="d-flex gap-2" method="GET">
+            <input type="hidden" name="status" value="{{status_filter or ''}}">
+            <input type="text" name="search" class="form-control form-control-sm rounded-pill px-3" placeholder="Search Mobile..." value="{{search_query or ''}}">
+            <button type="submit" class="btn btn-sm btn-dark rounded-pill px-3">Search</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="bg-light text-muted small fw-bold">
+          <tr>
+            <th class="ps-4">#</th>
+            <th>Mobile</th>
+            <th class="text-center">Status</th>
+            <th>Vendor DLR </th>
+            <th>Time (IST)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in messages %}
+          <tr>
+            <td class="ps-4 text-muted small">{{ (page - 1) * limit + loop.index }}</td>
+            <td class="fw-bold">{{ m.mobile }}</td>
+            <td class="text-center">
+              {% set s = m.status|string|lower %}
+              <span class="badge rounded-pill 
+                {% if s in ['delivered', '1'] %}bg-success
+                {% elif s in ['read', '3', 'message_read'] %}bg-primary
+                {% elif s in ['submitted', 'sent', '0'] %}bg-info
+                {% elif s in ['failed', '2'] %}bg-danger
+                {% elif s in ['clicked'] %}bg-warning text-dark
+                {% elif s in ['replied'] %}bg-dark
+                {% else %}bg-secondary{% endif %}" style="min-width: 80px;">
+                {{ m.status|upper if m.status else 'PENDING' }}
+              </span>
+            </td>
+            <td>
+                <div class="small fw-bold text-dark">{{ m.display_vendor_dlr }}</div>
+            </td>
+            <td class="small text-muted">
+                {# Using the pre-formatted IST display_time from the backend #}
+                {{ m.display_time }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer bg-white border-top py-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="small text-muted">
+          {% if total_records > 0 %}
+            Showing <strong>{{ (page - 1) * limit + 1 }}</strong>–<strong>{{ [page * limit, total_records]|min }}</strong>
+            of <strong>{{ total_records }}</strong> records
+          {% else %}
+            No records found
+          {% endif %}
+        </div>
+
+        {% if total_pages > 1 %}
+        <nav aria-label="Message report pagination">
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+              <a class="page-link"
+                 href="?page={{ page - 1 }}&limit={{ limit }}&status={{ status_filter or '' }}&search={{ search_query or '' }}"
+                 aria-label="Previous">Previous</a>
+            </li>
+
+            {% if start_page > 1 %}
+              <li class="page-item">
+                <a class="page-link" href="?page=1&limit={{ limit }}&status={{ status_filter or '' }}&search={{ search_query or '' }}">1</a>
+              </li>
+              {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endif %}
+
+            {% for page_number in range(start_page, end_page + 1) %}
+              <li class="page-item {% if page_number == page %}active{% endif %}">
+                <a class="page-link"
+                   href="?page={{ page_number }}&limit={{ limit }}&status={{ status_filter or '' }}&search={{ search_query or '' }}">
+                  {{ page_number }}
+                </a>
+              </li>
+            {% endfor %}
+
+            {% if end_page < total_pages %}
+              {% if end_page < total_pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+              <li class="page-item">
+                <a class="page-link"
+                   href="?page={{ total_pages }}&limit={{ limit }}&status={{ status_filter or '' }}&search={{ search_query or '' }}">
+                  {{ total_pages }}
+                </a>
+              </li>
+            {% endif %}
+
+            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+              <a class="page-link"
+                 href="?page={{ page + 1 }}&limit={{ limit }}&status={{ status_filter or '' }}&search={{ search_query or '' }}"
+                 aria-label="Next">Next</a>
+            </li>
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

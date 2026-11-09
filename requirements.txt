@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-dotenv
+pymongo
+redis
+passlib[bcrypt]
+python-jose
+requests
+jinja2
+python-multipart
+openpyxl==3.1.5

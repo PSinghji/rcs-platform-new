@@ -1,0 +1,424 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-primary m-0">Users Management</h4>
+            <p class="text-muted small mb-0">Manage system users, resellers, and their wallet balances.</p>
+        </div>
+        <a href="/ui/users/create" class="btn btn-primary shadow-sm rounded-3">
+            <i class="fas fa-plus-circle me-1"></i> Create New User
+        </a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-primary text-white rounded-4 overflow-hidden position-relative">
+                <div class="card-body position-relative z-1">
+                    <div class="small opacity-75 text-uppercase fw-bold">Total Users</div>
+                    <div class="h3 fw-bold mb-0 mt-1">{{ users|length }}</div>
+                </div>
+                <i class="fas fa-users position-absolute opacity-25" style="font-size: 4rem; right: -10px; bottom: -10px;"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm overflow-hidden rounded-4">
+        <div class="card-header bg-white py-3 border-0 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <h6 class="m-0 fw-bold text-dark"><i class="fas fa-list me-2 text-primary"></i>All Registered Accounts</h6>
+            
+            <div class="input-group shadow-sm" style="max-width: 350px; border-radius: 50px; overflow: hidden;">
+                <span class="input-group-text bg-light border-0 ps-3"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="tableSearch" class="form-control bg-light border-0 small fw-bold text-muted" placeholder="Search name, username, mobile...">
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="userTable">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 py-3 border-0 text-uppercase small fw-bold text-muted">#</th>
+                            <th class="py-3 border-0 text-uppercase small fw-bold text-muted">User Identity</th>
+                            <th class="py-3 border-0 text-uppercase small fw-bold text-muted">Role & Upline</th>
+                            <th class="py-3 border-0 text-uppercase small fw-bold text-muted text-center">Wallet Balance</th>
+                            {% if user.role == 'admin' %}
+                             <th class="py-3 border-0 text-uppercase small fw-bold text-center text-muted">Password</th>
+                            {% endif %}
+                            <th class="py-3 border-0 text-uppercase small fw-bold text-center text-muted">Status</th>
+                            <th class="pe-4 py-3 border-0 text-uppercase small fw-bold text-end text-muted">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        {% for u in users %}
+                        <tr class="user-row border-bottom-0">
+                            <td class="ps-4 text-muted small fw-bold">{{ loop.index }}</td>
+                            
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-sm me-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center rounded-circle fw-bold" style="width: 40px; height: 40px; font-size: 16px;">
+                                        {{ u.name[0]|upper if u.name else 'U' }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark mb-0">{{ u.name }}</div>
+                                        <div class="small text-primary fw-bold" style="font-size: 0.75rem;">@{{ u.username }}</div>
+                                        <div class="text-muted extra-small">{{ u.email }}</div>
+                                        {% if u.mobile %}
+                                        <div class="text-muted extra-small"><i class="bi bi-phone me-1"></i>{{ u.mobile }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    <div>
+                                        {% if u.role == 'admin' %}
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2">Administrator</span>
+                                        {% elif u.role == 'reseller' %}
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2">Reseller</span>
+                                        {% else %}
+                                            <span class="badge bg-info-subtle text-info border border-info-subtle rounded-pill px-2">User</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="extra-small text-muted">
+                                        <span class="opacity-75">Upline:</span> 
+                                        <strong>{{ u.upline_username if u.upline_name else 'System' }}</strong>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td class="text-center">
+                                <div class="fw-bold fs-6 text-dark">
+                                    <span class="text-success small me-1"></span>{{ "{:,.0f}".format(u.wallet_balance|default(0)) }}
+                                </div>
+                            </td>
+
+                            {% if user.role == 'admin' %}
+                            <td class="text-center">
+                                <div class="small text-primary mb-1 fw-bold" style="font-size: 0.7rem; opacity: 0.8;">
+                                    ({{ u.username }})
+                                </div>
+                            
+                                <div class="d-flex align-items-center justify-content-center bg-light rounded-pill px-2 py-1 d-inline-flex border">
+                                    <span id="pw-{{ u._id }}" class="me-2 small font-monospace text-muted" style="letter-spacing: 2px;">••••••</span>
+                                    <button class="btn btn-sm btn-link p-0 border-0 text-decoration-none" onclick="fetchPassword('{{ u._id }}')" title="Reveal">
+                                        <i class="fas fa-eye text-primary small"></i>
+                                    </button>
+                                </div>
+                               
+                            </td>
+                            {% endif %}
+                            
+                            <td class="text-center">
+                                {% if u.active == True or u.status == 'active' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill"><i class="fas fa-check-circle me-1"></i> Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill"><i class="fas fa-ban me-1"></i> Inactive</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end pe-4">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" 
+                                            class="btn btn-sm btn-soft-success" 
+                                            onclick="openWalletModal('{{ u._id }}', 'credit', '{{ u.username }}')"
+                                            data-bs-toggle="tooltip"
+                                            title="Add Funds">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-sm btn-soft-danger" 
+                                            onclick="openWalletModal('{{ u._id }}', 'debit', '{{ u.username }}')"
+                                            data-bs-toggle="tooltip"
+                                            title="Deduct Funds">
+                                        <i class="bi bi-dash-lg"></i>
+                                    </button>
+                            
+                                    <a href="/ui/users/{{ u._id }}/edit" 
+                                       class="btn btn-sm btn-light border shadow-sm text-primary" 
+                                       data-bs-toggle="tooltip"
+                                       title="Edit Profile">
+                                        <i class="bi bi-pencil-fill small"></i>
+                                    </a>
+                                    <a href="/ui/wallet/history/{{ u._id }}" class="btn btn-sm btn-light border shadow-sm" title="View History">
+                                        <i class="bi bi-clock-history text-primary"></i>
+                                    </a>
+                                     <a href="/ui/campaigns/list/{{ u._id }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i> View Campaigns
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr class="user-row">
+                            <td colspan="8" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-users-slash fa-3x mb-3 opacity-25"></i>
+                                    <p class="mb-0 fw-bold">No users found</p>
+                                    <small>Try creating a new user to get started.</small>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white border-0 py-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div class="text-muted small fw-bold" id="paginationInfo">Loading data...</div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 gap-1" id="paginationControls">
+                        </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Table & Fonts */
+    .extra-small { font-size: 0.75rem; }
+    .table thead th { font-size: 0.7rem; letter-spacing: 0.5px; }
+    
+    /* Trendy Buttons */
+    .btn-soft-success { background-color: #d1e7dd; color: #0f5132; border: none; transition: 0.2s; }
+    .btn-soft-success:hover { background-color: #198754; color: #fff; transform: translateY(-2px); }
+
+    .btn-soft-danger { background-color: #f8d7da; color: #842029; border: none; transition: 0.2s; }
+    .btn-soft-danger:hover { background-color: #dc3545; color: #fff; transform: translateY(-2px); }
+
+    /* Pagination Styles */
+    .page-link {
+        color: var(--text-muted, #64748b);
+        background-color: #f8fafc;
+        min-width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s; border: 1px solid #e2e8f0; border-radius: 6px;
+    }
+    .page-link:hover { background-color: #e2e8f0; transform: translateY(-2px); color: var(--accent-color, #3b82f6); }
+    .page-item.active .page-link { background-color: var(--accent-color, #3b82f6) !important; color: #fff !important; border-color: transparent; }
+    .page-item.disabled .page-link { background-color: transparent; opacity: 0.5; cursor: not-allowed; }
+</style>
+
+<script>
+/** 1. PASSWORD REVEAL LOGIC */
+async function fetchPassword(userId) {
+    const span = document.getElementById(`pw-${userId}`);
+    if (!span) return;
+    
+    // Toggle back to dots if already shown
+    if (!span.innerText.includes('•')) {
+        span.innerText = '••••••';
+        span.classList.remove('text-dark', 'fw-bold');
+        span.classList.add('text-muted');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/ui/users/${userId}/decrypt`);
+        if (!response.ok) throw new Error("Decrypt failed");
+        
+        const data = await response.json();
+        if (data.password) {
+            span.innerText = data.password;
+            span.classList.remove('text-muted');
+            span.classList.add('text-dark', 'fw-bold');
+        }
+    } catch (err) {
+        // Fallback or Alert
+        if(typeof Swal !== 'undefined') {
+            Swal.fire('Error', 'Could not retrieve password', 'error');
+        } else {
+            alert("Error retrieving password");
+        }
+    }
+}
+
+
+/** 2. WALLET MODAL LOGIC (Corrected for Error Handling) */
+async function openWalletModal(userId, action, username) {
+    if (typeof Swal === 'undefined') { alert("SweetAlert2 not loaded"); return; }
+
+    const isCredit = action === 'credit';
+    const color = isCredit ? '#198754' : '#dc3545';
+    const actionTitle = isCredit ? 'Add Credit' : 'Deduct Balance';
+
+    const { value: formValues } = await Swal.fire({
+        title: `<span style="color:${color}">${actionTitle}</span>`,
+        html: `
+            <div class="text-start mb-3">
+                <small class="text-muted">Updating wallet for <strong>@${username}</strong></small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted">Amount</label>
+                <input id="swal-amount" type="number" step="0.01" min="1" class="form-control form-control-lg text-center fw-bold" placeholder="0.00">
+            </div>
+            <div class="mb-0">
+                <label class="form-label small fw-bold text-muted">Reason / Remark</label>
+                <input id="swal-reason" type="text" class="form-control" placeholder="e.g. Manual Adjustment">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: color,
+        confirmButtonText: isCredit ? '<i class="bi bi-plus-lg"></i> Credit' : '<i class="bi bi-dash-lg"></i> Deduct',
+        focusConfirm: false,
+        preConfirm: () => {
+            const amount = document.getElementById('swal-amount').value;
+            const reason = document.getElementById('swal-reason').value;
+            if (!amount || amount <= 0) return Swal.showValidationMessage('Valid amount required');
+            if (!reason) return Swal.showValidationMessage('Reason is required');
+            return { amount, reason };
+        }
+    });
+
+    if (formValues) {
+        Swal.fire({ title: 'Processing...', didOpen: () => Swal.showLoading() });
+
+        try {
+            const formData = new FormData();
+            formData.append('target_id', userId);
+            formData.append('action', action);
+            formData.append('amount', formValues.amount);
+            formData.append('reason', formValues.reason);
+
+            const response = await fetch('/ui/admin/users/wallet/process', {
+                method: 'POST', 
+                body: formData
+            });
+
+            // If the backend redirects, we check the URL it redirected to
+            if (response.redirected) {
+                const url = new URL(response.url);
+                const error = url.searchParams.get('error');
+                const success = url.searchParams.get('success');
+
+                if (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Transaction Failed',
+                        text: error, // This will show "Insufficient Balance" or similar from backend
+                        confirmButtonColor: '#dc3545'
+                    });
+                    return;
+                }
+            }
+            
+            // If the backend returns JSON
+            const result = await response.json().catch(() => ({})); 
+
+            if (response.ok && !result.error) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: result.message || `Wallet updated successfully.`,
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => window.location.reload());
+            } else {
+                // Show Error Pop-up
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Insufficient Balance',
+                    text: result.error || 'You do not have enough balance in your wallet to perform this debit.',
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        } catch (error) {
+            Swal.fire('Error', 'An unexpected error occurred. Please try again.', 'error');
+        }
+    }
+}
+/** 3. PAGINATION & SEARCH LOGIC */
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('tableSearch');
+    const tbody = document.getElementById('tableBody');
+    const allRows = Array.from(tbody.querySelectorAll('tr.user-row'));
+    const paginationControls = document.getElementById('paginationControls');
+    const paginationInfo = document.getElementById('paginationInfo');
+
+    let currentPage = 1;
+    const rowsPerPage = 10;
+    let filteredRows = [...allRows]; // Start with all
+
+    function renderTable() {
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        // Hide all first
+        allRows.forEach(row => row.style.display = 'none');
+
+        // Show window of filtered rows
+        const rowsToShow = filteredRows.slice(start, end);
+        if (rowsToShow.length > 0) {
+            rowsToShow.forEach(row => row.style.display = '');
+            paginationInfo.innerText = `Showing ${start + 1} to ${Math.min(end, filteredRows.length)} of ${filteredRows.length} entries`;
+        } else {
+            // Show "No Results" row if needed, or handle empty state
+             paginationInfo.innerText = `No results found`;
+        }
+
+        renderPagination();
+    }
+
+    function renderPagination() {
+        paginationControls.innerHTML = '';
+        const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+
+        if (totalPages <= 1) return;
+
+        const createBtn = (text, page, isActive, isDisabled) => {
+            const li = document.createElement('li');
+            li.className = `page-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+            li.innerHTML = `<button class="page-link" onclick="goToPage(${page})">${text}</button>`;
+            return li;
+        };
+
+        // Prev
+        paginationControls.appendChild(createBtn('<i class="fas fa-chevron-left"></i>', currentPage - 1, false, currentPage === 1));
+
+        // Pages (Smart Window)
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                paginationControls.appendChild(createBtn(i, i, i === currentPage));
+            } else if (i === currentPage - 2 || i === currentPage + 2) {
+                const dots = document.createElement('li');
+                dots.className = 'page-item disabled';
+                dots.innerHTML = '<span class="page-link border-0">...</span>';
+                paginationControls.appendChild(dots);
+            }
+        }
+
+        // Next
+        paginationControls.appendChild(createBtn('<i class="fas fa-chevron-right"></i>', currentPage + 1, false, currentPage === totalPages));
+    }
+
+    // Expose to Global Scope for onclick="goToPage()"
+    window.goToPage = function(page) {
+        currentPage = page;
+        renderTable();
+    };
+
+    // Live Search Listener
+    searchInput.addEventListener('keyup', function() {
+        const term = this.value.toLowerCase().trim();
+        
+        filteredRows = allRows.filter(row => {
+            // Search inside the whole row text (Name, User, Email, Mobile)
+            return row.innerText.toLowerCase().includes(term);
+        });
+
+        currentPage = 1; // Reset to page 1
+        renderTable();
+    });
+
+    // Initial Render
+    renderTable();
+});
+</script>
+
+{% endblock %}

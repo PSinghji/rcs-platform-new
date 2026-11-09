@@ -1,0 +1,284 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="container-fluid pb-5">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h4 class="fw-bold text-dark m-0">Create New Account</h4>
+            <p class="text-muted small">Setup user credentials, billing, and gateway routing</p>
+        </div>
+        <a href="/ui/users/list" class="btn btn-light border btn-sm px-3">
+            <i class="fas fa-arrow-left me-1"></i> Back to List
+        </a>
+    </div>
+
+    <form id="userForm">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 rounded-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 fw-bold"><i class="fas fa-user-circle me-2 text-primary"></i>Personal & Login Details</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Full Name</label>
+                                <input id="name" class="form-control bg-light border-0 py-2" placeholder="e.g. John Doe" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Mobile Number</label>
+                                <input id="mobile" type="tel" class="form-control bg-light border-0 py-2" placeholder="9999999990" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Username</label>
+                                <input id="username" class="form-control bg-light border-0 py-2" placeholder="johndoe_rcs" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Email Address</label>
+                                <input id="email" type="email" class="form-control bg-light border-0 py-2" placeholder="john@example.com" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Login Password</label>
+                                <input id="password" type="password" class="form-control bg-light border-0 py-2" placeholder="••••••••" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Account Role</label>
+                                <select id="role" class="form-select bg-light border-0 py-2">
+                                    <option value="user">Standard User</option>
+                                    <option value="reseller">Reseller</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if user.role == 'admin' %}
+                <div class="card shadow-sm border-0 rounded-4 mt-4">
+                    <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold"><i class="fas fa-server me-2 text-warning"></i>Gateway Credentials</h6>
+                        <span class="badge bg-warning-subtle text-warning fw-normal">Admin Only</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr class="small text-uppercase text-muted">
+                                        <th class="ps-4 py-3" style="width: 80px;">Active</th>
+                                        <th class="py-3">Provider</th>
+                                        <th class="py-3">API Key / Token</th>
+                                        <th class="pe-4 py-3">Agent/Entity ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for p in providers %}
+                                    <tr class="provider-row" data-provider="{{ p.code }}">
+                                        <td class="ps-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input active-provider-radio" type="radio" name="active_provider" value="{{ p.code }}" id="radio_{{ p.code }}" {% if loop.first %}checked{% endif %}>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <label for="radio_{{ p.code }}" class="fw-bold d-block mb-0" style="cursor: pointer;">{{ p.name }}</label>
+                                            <div class="text-muted extra-small">{{ p.type }}</div>
+                                        </td>
+                                        <td><input class="form-control form-control-sm border-0 bg-light provider-api-key" placeholder="Paste Key"></td>
+                                        <td class="pe-4"><input class="form-control form-control-sm border-0 bg-light provider-agent-id" placeholder="ID"></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="m-0 fw-bold"><i class="fas fa-wallet me-2 text-success"></i>Billing Configuration</h6>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Cost Per Msg </label>
+                            <div class="input-group">
+                                <input id="per_message_cost" type="number" class="form-control py-2 bg-light text-muted fw-bold" value="1" readonly>
+                                <span class="input-group-text bg-light border-start-0 text-muted"><i class="fas fa-lock small"></i></span>
+                            </div>
+                            <div class="form-text extra-small text-muted">Fixed platform rate. Cannot be changed.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Initial Wallet Balance</label>
+                            <input id="initial_credit" type="number" class="form-control py-2" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Credit Expiry</label>
+                            <input id="credit_expiry" type="date" class="form-control py-2">
+                        </div>
+                        
+                        <div class="form-check form-switch py-2 px-0 d-flex justify-content-between align-items-center border-top mt-3">
+                            <label class="form-check-label small fw-bold" for="refund_enabled">Enable Automated Refund</label>
+                            <input class="form-check-input ms-0" type="checkbox" id="refund_enabled" checked>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 rounded-4 bg-dark text-white">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3 small text-uppercase opacity-75">Admin Controls</h6>
+                        
+                        {% if user.role == 'admin' %}
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-warning">Internal Cutting (%)</label>
+                            <input id="cutting_percent" type="number" min="0" max="100" class="form-control bg-secondary border-0 text-white" value="0">
+                            <div class="extra-small mt-1 text-white-50">Percentage applied only after the protected threshold.</div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-warning">Cutting Threshold</label>
+                            <input id="cutting_threshold" type="number" min="0" class="form-control bg-secondary border-0 text-white" value="100">
+                            <div class="extra-small mt-1 text-white-50">No cutting is applied when the campaign audience is at or below this value.</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">Account Status</label>
+                            <select id="active" class="form-select bg-secondary border-0 text-white">
+                                <option value="true">Active / Enabled</option>
+                                <option value="false">Suspended / Inactive</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-2 fw-bold shadow">
+                            <i class="fas fa-check-circle me-2"></i>Create User Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+    <div id="result" class="mt-4"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Set Default Date (Merged logic)
+    const dateInput = document.getElementById('credit_expiry');
+    if (dateInput && !dateInput.value) {
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        dateInput.value = nextYear.toISOString().split('T')[0];
+    }
+});
+
+document.getElementById("userForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  
+  // 2. SweetAlert2 Safety Check
+  if (typeof Swal === 'undefined') {
+      alert("Error: SweetAlert2 library failed to load from Base Layout.");
+      return;
+  }
+
+  const btn = document.getElementById("submitBtn");
+  const originalBtnHtml = btn.innerHTML;
+
+  // 3. Show "Processing" Loader
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Creating...`;
+
+  // 4. Collect Data
+  const providerConfigs = {};
+  document.querySelectorAll(".provider-row").forEach(row => {
+      const pCode = row.getAttribute("data-provider");
+      const key = row.querySelector(".provider-api-key").value.trim();
+      const aid = row.querySelector(".provider-agent-id").value.trim();
+      if (key || aid) {
+          providerConfigs[pCode] = { api_key: key, agent_id: aid };
+      }
+  });
+
+  const activeProvider = document.querySelector('input[name="active_provider"]:checked')?.value;
+
+  const payload = {
+    name: document.getElementById("name").value.trim(),
+    mobile: document.getElementById("mobile").value.trim(),
+    username: document.getElementById("username").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    password: document.getElementById("password").value,
+    role: document.getElementById("role").value,
+    provider_credentials: providerConfigs,
+    active_provider: activeProvider, 
+    refund_enabled: document.getElementById("refund_enabled").checked,
+    
+    // --- UPDATED LOGIC: HARDCODED TO 1.0 ---
+    // Instead of reading the input value, we force 1.0 here.
+    per_message_cost: 1.0, 
+    
+    initial_credit: parseFloat(document.getElementById("initial_credit").value || 0),
+    credit_expiry: document.getElementById("credit_expiry").value || null,
+    cutting_percent: parseInt(document.getElementById("cutting_percent")?.value || 0),
+    cutting_threshold: parseInt(document.getElementById("cutting_threshold")?.value || 100),
+    active: document.getElementById("active").value === "true"
+  };
+
+  try {
+    const res = await fetch("/ui/admin/users/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+
+    if (res.ok) {
+        // SUCCESS POPUP
+        Swal.fire({
+            icon: 'success',
+            title: 'Account Created!',
+            text: `User ${payload.username} has been set up successfully.`,
+            timer: 2000,
+            showConfirmButton: false,
+            timerProgressBar: true
+        }).then(() => {
+            // Redirect to the list page
+            window.location.href = "/ui/users/list";
+        });
+    } else {
+        // SERVER-SIDE ERROR
+        Swal.fire({
+            icon: 'error',
+            title: 'Creation Failed',
+            text: data.detail || "Could not create user account.",
+            confirmButtonColor: '#0d6efd'
+        });
+        btn.disabled = false;
+        btn.innerHTML = originalBtnHtml;
+    }
+  } catch (err) {
+    // NETWORK ERROR
+    Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Unable to reach the server. Please check your internet.',
+    });
+    btn.disabled = false;
+    btn.innerHTML = originalBtnHtml;
+  }
+});
+</script>
+
+<style>
+    .extra-small { font-size: 0.75rem; }
+    .form-control:focus { box-shadow: none; border: 1px solid #0d6efd; }
+    .card { transition: all 0.3s ease; }
+    .provider-row:hover { background-color: #f8f9fa; }
+    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
+    
+    /* Make readonly inputs look distinct */
+    input[readonly] {
+        cursor: not-allowed;
+        background-color: #f8f9fa !important;
+    }
+</style>
+
+{% endblock %}

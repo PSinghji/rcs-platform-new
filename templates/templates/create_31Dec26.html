@@ -1,0 +1,649 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+  <h4 class="mb-3">Create RCS Template</h4>
+
+  <div class="row">
+
+    <!-- ================= FORM ================= -->
+    <div class="col-md-7">
+      <form id="templateForm">
+
+        <div class="mb-3">
+          <label class="form-label">Template Name</label>
+          <input type="text" id="tpl_name" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Template Type</label>
+          <select id="templateType" class="form-select" required>
+            <option value="">Select</option>
+            <option value="plain">Text</option>
+            <option value="rich">Rich Card</option>
+            <option value="carousel">Carousel</option>
+          </select>
+        </div>
+
+        <!-- ================= TEXT ================= -->
+        <div id="textBox" class="d-none mb-3">
+          <textarea id="plain_text" class="form-control" rows="4"
+            placeholder="Use dynamic vars like $A, $B"></textarea>
+        </div>
+
+        <!-- ================= RICH CARD ================= -->
+        <div id="richBox" class="d-none">
+
+          <input class="form-control mb-2" id="rich_title" placeholder="Card Title">
+          <textarea class="form-control mb-2" id="rich_desc" placeholder="Description"></textarea>
+
+          <!-- ===== MEDIA UPLOAD ===== -->
+          <label class="form-label mt-2">Media</label>
+
+          <select id="rich_media_type" class="form-select mb-1">
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="pdf">PDF</option>
+          </select>
+
+          <input type="file" id="rich_media_file"
+                 class="form-control mb-2"
+                 accept="image/*,video/*,.pdf"
+                 onchange="previewMedia(this, 'rich')">
+
+          <div id="richMediaPreview" class="border rounded p-2 mb-2 d-none text-center">
+            <img class="img-fluid d-none" />
+            <video controls class="w-100 d-none"></video>
+            <div class="pdf-preview d-none">
+              📄 <span class="pdf-name"></span>
+            </div>
+          </div>
+
+          <input type="hidden" id="rich_media_url">
+
+          <!-- ===== ACTIONS ===== -->
+          <label class="form-label mt-2">Actions (Max 4)</label>
+          <div id="richActions"></div>
+
+          <button type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  onclick="addAction('richActions')">
+            + Add Action
+          </button>
+        </div>
+
+        <!-- ================= CAROUSEL ================= -->
+        <div id="carouselBox" class="d-none">
+          <div id="carouselCards"></div>
+
+          <button type="button"
+                  class="btn btn-outline-secondary btn-sm mt-2"
+                  onclick="addCarouselCard()">
+            + Add Card
+          </button>
+
+          <small class="text-muted d-block mt-2">Min 2 – Max 10 cards</small>
+        </div>
+
+        <button type="button"
+                onclick="buildTemplate()"
+                class="btn btn-primary mt-4 w-100">
+          Generate Preview
+        </button>
+        <button type="button"
+                onclick="submitTemplate()"
+                class="btn btn-success mt-2 w-100">
+          Submit for Admin Approval
+        </button>
+
+      </form>
+    </div>
+
+    <!-- ================= PREVIEW ================= -->
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header">Mobile Preview</div>
+        <div class="card-body">
+          <div id="previewArea"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+ 
+const templateType = document.getElementById("templateType");
+const textBox = document.getElementById("textBox");
+const richBox = document.getElementById("richBox");
+const carouselBox = document.getElementById("carouselBox");
+
+templateType.onchange = () => {
+  textBox.classList.add("d-none");
+  richBox.classList.add("d-none");
+  carouselBox.classList.add("d-none");
+
+  if (templateType.value === "plain") textBox.classList.remove("d-none");
+  if (templateType.value === "rich") richBox.classList.remove("d-none");
+  if (templateType.value === "carousel") carouselBox.classList.remove("d-none");
+};
+
+/* ================= MEDIA PREVIEW ================= */
+function previewMedia(input, scope) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const MAX_UPLOAD_MB = 10;
+
+  const previewBox = document.getElementById(scope + "MediaPreview");
+  const img = previewBox.querySelector("img");
+  const vid = previewBox.querySelector("video");
+  const pdf = previewBox.querySelector(".pdf-preview");
+
+  /* ================= SIZE VALIDATION ================= */
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+    alert(`File too large. Max allowed size is ${MAX_UPLOAD_MB} MB.`);
+
+    // 🔥 RESET FILE INPUT
+    input.value = "";
+
+    // 🔥 RESET PREVIEW UI
+    previewBox.classList.add("d-none");
+    img.src = "";
+    vid.src = "";
+    pdf.querySelector(".pdf-name").innerText = "";
+
+    img.classList.add("d-none");
+    vid.classList.add("d-none");
+    pdf.classList.add("d-none");
+
+    // 🔥 REMOVE STORED DATA
+    delete previewBox.dataset.previewUrl;
+    delete previewBox.dataset.previewType;
+    delete previewBox.dataset.finalUrl;
+
+    return;
+  }
+
+  /* ================= NORMAL PREVIEW ================= */
+
+  previewBox.classList.remove("d-none");
+  img.classList.add("d-none");
+  vid.classList.add("d-none");
+  pdf.classList.add("d-none");
+
+  const blobUrl = URL.createObjectURL(file);
+
+  previewBox.dataset.previewUrl = blobUrl;
+  previewBox.dataset.previewType = file.type;
+
+  if (file.type.startsWith("image/")) {
+    img.src = blobUrl;
+    img.classList.remove("d-none");
+  }
+  else if (file.type.startsWith("video/")) {
+    vid.src = blobUrl;
+    vid.classList.remove("d-none");
+  }
+  else {
+    pdf.querySelector(".pdf-name").innerText = file.name;
+    pdf.classList.remove("d-none");
+  }
+
+  // ✅ AUTO-UPLOAD ONLY FOR CAROUSEL CARDS
+  if (scope.startsWith("ca_")) {
+    uploadCarouselMedia(file, previewBox);
+  }
+}
+function renderMediaPreview(previewBoxId) {
+  const box = document.getElementById(previewBoxId);
+  if (!box || !box.dataset.previewUrl) return "";
+
+  const url = box.dataset.previewUrl;
+  const type = box.dataset.previewType;
+
+  if (type.startsWith("image/")) {
+    return `<img src="${url}" class="img-fluid rounded mb-2">`;
+  }
+
+  if (type.startsWith("video/")) {
+    return `
+      <video controls class="w-100 rounded mb-2">
+        <source src="${url}">
+      </video>`;
+  }
+
+  return `
+    <div class="border rounded p-2 mb-2 text-center">
+      📄 <a href="${url}" target="_blank">View PDF</a>
+    </div>`;
+}
+
+/* ================= ACTION BUILDER ================= */
+function addAction(containerId) {
+  const box = document.getElementById(containerId);
+  if (box.children.length >= 4) return alert("Max 4 actions allowed");
+
+  const div = document.createElement("div");
+  div.className = "border rounded p-2 mb-2";
+
+  div.innerHTML = `
+    <select class="form-select mb-1 actType">
+      <option value="openUrl">Open URL</option>
+      <option value="dial">Dial</option>
+      <option value="reply">Reply</option>
+    </select>
+    <input class="form-control mb-1 actText" placeholder="Button Text">
+    <input class="form-control mb-1 actValue" placeholder="URL / Phone / Payload">
+    <button class="btn btn-sm btn-danger"
+            onclick="this.parentElement.remove()">Remove</button>
+  `;
+  box.appendChild(div);
+}
+
+/* ================= CAROUSEL CARD ================= */
+function addCarouselCard() {
+  const container = document.getElementById("carouselCards");
+  if (container.children.length >= 10) return alert("Max 10 cards allowed");
+
+  const id = "ca_" + Date.now();
+  const wrapper = document.createElement("div");
+  wrapper.className = "border rounded p-2 mt-3";
+
+  wrapper.innerHTML = `
+    <input class="form-control mb-1 ct" placeholder="Card Title">
+    <textarea class="form-control mb-1 cd" placeholder="Description"></textarea>
+
+    <!-- MEDIA -->
+    <select class="form-select mb-1 cm_type">
+      <option value="image">Image</option>
+      <option value="video">Video</option>
+      <option value="pdf">PDF</option>
+    </select>
+
+    <input type="file"
+           class="form-control mb-1 cm_file"
+           accept="image/*,video/*,.pdf"
+           onchange="previewMedia(this, '${id}')">
+
+    <div id="${id}MediaPreview"
+         class="border rounded p-2 mb-2 d-none text-center">
+      <img class="img-fluid d-none" />
+      <video controls class="w-100 d-none"></video>
+      <div class="pdf-preview d-none">
+        📄 <span class="pdf-name"></span>
+      </div>
+    </div>
+
+    <label class="small">Card Actions (Max 4)</label>
+    <div id="${id}"></div>
+
+    <div class="d-flex gap-2 mt-1">
+      <button type="button"
+        class="btn btn-sm btn-outline-secondary"
+        onclick="addAction('${id}')">+ Action</button>
+      <button type="button"
+        class="btn btn-sm btn-danger"
+        onclick="removeCarouselCard(this)">Remove Card</button>
+    </div>
+  `;
+  container.appendChild(wrapper);
+}
+
+function removeCarouselCard(btn) {
+  const container = document.getElementById("carouselCards");
+  if (container.children.length <= 2) {
+    alert("Minimum 2 cards required");
+    return;
+  }
+  btn.closest(".border").remove();
+}
+
+/* ================= PREVIEW ================= */
+function buildTemplate() {
+  const preview = document.getElementById("previewArea");
+  preview.innerHTML = "";
+
+  const type = templateType.value;
+
+  /* ========== PLAIN TEXT ========== */
+  if (type === "plain") {
+    preview.innerHTML = `<p>${plain_text.value}</p>`;
+    return;
+  }
+
+  /* ========== RICH CARD ========== */
+  if (type === "rich") {
+    const mediaHtml = renderMediaPreview("richMediaPreview");
+
+    preview.innerHTML = `
+      ${mediaHtml}
+      <h6>${rich_title.value}</h6>
+      <p class="small">${rich_desc.value}</p>
+      ${renderActions(document.getElementById("richActions"))}
+    `;
+    return;
+  }
+
+  /* ========== CAROUSEL ========== */
+  if (type === "carousel") {
+
+    const cards = Array.from(
+      document.querySelectorAll("#carouselCards > .border")
+    );
+
+    if (cards.length < 2) {
+      preview.innerHTML =
+        `<p class="text-danger">Carousel requires minimum 2 cards</p>`;
+      return;
+    }
+
+    let slides = "";
+
+    cards.forEach((c, i) => {
+      const mediaBox = c.querySelector("div[id$='MediaPreview']");
+      const mediaHtml = mediaBox ? renderMediaPreview(mediaBox.id) : "";
+
+      slides += `
+        <div class="carousel-item ${i === 0 ? "active" : ""}">
+          <div class="p-3">
+            ${mediaHtml}
+            <h6>${c.querySelector(".ct").value}</h6>
+            <p class="small">${c.querySelector(".cd").value}</p>
+            ${renderActions(c.querySelector("div[id^='ca_']"))}
+          </div>
+        </div>
+      `;
+    });
+
+    const carouselId = "previewCarousel_" + Date.now();
+    
+     
+     preview.innerHTML = `
+       <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel">
+         <div class="carousel-inner">
+           ${slides}
+         </div>
+     
+         <button class="carousel-control-prev" type="button"
+                 data-bs-target="#${carouselId}" data-bs-slide="prev">
+           <span class="carousel-control-prev-icon"></span>
+         </button>
+     
+         <button class="carousel-control-next" type="button"
+                 data-bs-target="#${carouselId}" data-bs-slide="next">
+           <span class="carousel-control-next-icon"></span>
+         </button>
+       </div>
+     `;
+     
+     // 🔥 FORCE BOOTSTRAP INIT
+     new bootstrap.Carousel(
+       document.getElementById(carouselId),
+       { interval: false }
+     );
+    
+  }
+}
+
+function renderActions(container) {
+  if (!container) return "";
+  let html = '<div class="d-grid gap-2">';
+  container.querySelectorAll(".actText").forEach(a=>{
+    html += `<button class="btn btn-outline-primary btn-sm">${a.value}</button>`;
+  });
+  return html + '</div>';
+}
+</script>
+<script>
+  let richMediaUrl = null;
+
+async function uploadRichMedia() {
+  const fileInput = document.getElementById("rich_media_file");
+  if (!fileInput || !fileInput.files.length) {
+    richMediaUrl = null;
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  const res = await fetch("/api/media/upload", {
+    method: "POST"
+  , body: formData
+  });
+
+  if (!res.ok) {
+    alert("Media upload failed");
+    return;
+  }
+
+  const data = await res.json();
+
+  // ✅ THIS IS THE FINAL URL USED IN JIO PAYLOAD
+  richMediaUrl = data.fileUrl;
+}
+
+async function uploadCarouselMedia(file, previewBox) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const res = await fetch("/api/media/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) {
+      if (res.status === 413) {
+        alert("File too large. Max allowed size is 10MB.");
+      } else {
+        alert("Carousel media upload failed");
+      }
+      return null;
+    }
+
+    const data = await res.json();
+    previewBox.dataset.finalUrl = data.fileUrl;
+    return data.fileUrl;
+
+  } catch (err) {
+    alert("Network error during media upload");
+    return null;
+  }
+}
+// Build action suggestions (Jio RCS compliant)
+function buildSuggestions(container) {
+  const suggestions = [];
+
+  if (!container) return suggestions;
+
+  container.querySelectorAll(".border").forEach(a => {
+    const type = a.querySelector(".actType")?.value;
+    const text = a.querySelector(".actText")?.value;
+    const value = a.querySelector(".actValue")?.value;
+
+    if (!text) return;
+
+    const action = { plainText: text };
+
+    if (type === "reply") action.postBack = { data: value };
+    if (type === "openUrl") action.openUrl = { url: value };
+    if (type === "dial") action.dial = { phoneNumber: value };
+
+    suggestions.push({ action });
+  });
+
+  return suggestions;
+}
+function buildRichCardPayload() {
+  return {
+    data: {
+      content: {
+        richCardDetails: {
+          standalone: {
+            cardOrientation: "VERTICAL",
+            content: {
+              cardTitle: rich_title.value,
+              cardDescription: rich_desc.value,
+              cardMedia: {
+                mediaHeight: "MEDIUM",
+                contentInfo: {
+                  fileUrl: richMediaUrl   // ✅ now defined
+                }
+              },
+              suggestions: buildSuggestions(
+                document.getElementById("richActions")
+              )
+            }
+          }
+        }
+      }
+    }
+  };
+}
+
+function buildCarouselPayload() {
+  const cards = [];
+
+  document.querySelectorAll("#carouselCards > .border").forEach(card => {
+    const mediaBox = card.querySelector("div[id$='MediaPreview']");
+    const mediaUrl = mediaBox?.dataset.finalUrl;
+
+    cards.push({
+      content: {
+        cardTitle: card.querySelector(".ct").value,
+        cardDescription: card.querySelector(".cd").value,
+        cardMedia: {
+          mediaHeight: "MEDIUM",
+          contentInfo: {
+            fileUrl: mediaUrl
+          }
+        },
+        suggestions: buildSuggestions(
+          card.querySelector("div[id^='ca_']")
+        )
+      }
+    });
+  });
+
+  return {
+    data: {
+      content: {
+        richCardDetails: {
+          carousel: {
+            cardWidth: "MEDIUM",
+            cards: cards
+          }
+        }
+      }
+    }
+  };
+}
+function buildFinalTemplatePayload() {
+  let contentPayload;
+
+  if (templateType.value === "rich") {
+    contentPayload = buildRichCardPayload();
+  } else if (templateType.value === "carousel") {
+    contentPayload = buildCarouselPayload();
+  } else {
+    contentPayload = {
+      data: {
+        content: {
+          plainText: plain_text.value
+        }
+      }
+    };
+  }
+
+  return {
+    name: tpl_name.value,
+    template_type: templateType.value,
+    content: contentPayload
+  };
+}
+async function submitTemplate() {
+  // Disable submit button to prevent double submit
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerText = "Submitting...";
+
+  try {
+    if (templateType.value === "carousel") {
+      const cards = document.querySelectorAll("#carouselCards > .border");
+      if (cards.length < 2) {
+        alert("Carousel requires minimum 2 cards");
+        return;
+      }
+    }
+    if (templateType.value === "carousel") {
+      let missingMedia = false;
+    
+      document.querySelectorAll("#carouselCards > .border").forEach(card => {
+        const mediaBox = card.querySelector("div[id$='MediaPreview']");
+        if (!mediaBox?.dataset.finalUrl) {
+          missingMedia = true;
+        }
+      });
+    
+      if (missingMedia) {
+        alert("Please upload media for all carousel cards");
+        return;
+      }
+    }
+    // Upload media first (if rich)
+    if (templateType.value === "rich") {
+      await uploadRichMedia();
+
+      if (!richMediaUrl) {
+        alert("Please upload media before submitting");
+        btn.disabled = false;
+        btn.innerText = "Submit for Admin Approval";
+        return;
+      }
+    }
+
+    const payload = buildFinalTemplatePayload();
+
+    const res = await fetch("/ui/templates/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.detail || "Error saving template");
+      btn.disabled = false;
+      btn.innerText = "Submit for Admin Approval";
+      return;
+    }
+
+    // ✅ Success
+    alert(data.message || "Template submitted for admin approval");
+
+    // ✅ RESET FORM
+    document.getElementById("templateForm").reset();
+    document.getElementById("previewArea").innerHTML = "";
+    document.getElementById("carouselCards").innerHTML = "";
+    richMediaUrl = null;
+
+    // ✅ REDIRECT TO TEMPLATE LIST
+    setTimeout(() => {
+      window.location.href = "/ui/templates";
+    }, 400);
+
+  } catch (err) {
+    console.error(err);
+    alert("Unexpected error while submitting template");
+    btn.disabled = false;
+    btn.innerText = "Submit for Admin Approval";
+  }
+}
+
+
+</script>
+{% endblock %}

@@ -1,0 +1,175 @@
+{% extends "layout/admin_base.html" %}
+
+{% block content %}
+<div class="container-fluid pb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold text-dark m-0">User Dashboard</h4>
+            <p class="text-muted small mb-0">Welcome back, <strong>{{ user.name }}</strong>! Here's what's happening today.</p>
+        </div>
+        <div class="text-end">
+            <a href="/ui/campaigns/create" class="btn btn-primary shadow-sm rounded-pill px-4">
+                <i class="fas fa-plus me-2"></i>New Campaign
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-primary text-white h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-white bg-opacity-25 rounded-3 p-2">
+                            <i class="fas fa-wallet fa-lg"></i>
+                        </div>
+                        <span class="small fw-bold">Current Funds</span>
+                    </div>
+                    <h2 class="fw-bold mb-1">₹ {{ "{:,.0f}".format(user.wallet_balance|default(0)) }}</h2>
+                    <p class="small mb-0 opacity-75">Available for campaigns</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 stats-card">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-soft-info text-info rounded-3 p-2">
+                            <i class="fas fa-bullhorn fa-lg"></i>
+                        </div>
+                    </div>
+                    <h6 class="text-muted fw-medium small text-uppercase mb-1">Total Campaigns</h6>
+                    <h2 class="fw-bold mb-0">{{ total_campaigns or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 stats-card">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="bg-soft-success text-success rounded-3 p-2">
+                            <i class="fas fa-paper-plane fa-lg"></i>
+                        </div>
+                    </div>
+                    <h6 class="text-muted fw-medium small text-uppercase mb-1">Messages Sent</h6>
+                    <h2 class="fw-bold mb-0">{{ total_messages or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h6 class="fw-bold text-uppercase small text-muted mb-3">Quick Navigation</h6>
+    <div class="row g-3 mb-5">
+        <div class="col-6 col-md-3">
+            <a href="/ui/campaigns/create" class="card border-0 shadow-sm text-decoration-none action-card h-100 text-center p-3">
+                <i class="fas fa-rocket text-primary fa-2x mb-2"></i>
+                <span class="fw-bold text-dark small d-block">Launch RCS</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/ui/templates/list" class="card border-0 shadow-sm text-decoration-none action-card h-100 text-center p-3">
+                <i class="fas fa-file-code text-warning fa-2x mb-2"></i>
+                <span class="fw-bold text-dark small d-block">My Templates</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/ui/campaigns/list" class="card border-0 shadow-sm text-decoration-none action-card h-100 text-center p-3">
+                <i class="fas fa-chart-bar text-success fa-2x mb-2"></i>
+                <span class="fw-bold text-dark small d-block">Reports</span>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="/ui/profile" class="card border-0 shadow-sm text-decoration-none action-card h-100 text-center p-3">
+                <i class="fas fa-user-circle text-info fa-2x mb-2"></i>
+                <span class="fw-bold text-dark small d-block">My Settings</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold">Recent Campaign Status</h5>
+            <a href="/ui/campaigns/list" class="text-primary text-decoration-none small">See all reports <i class="fas fa-chevron-right ms-1"></i></a>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4 border-0 py-3">Campaign Name</th>
+                        <th class="border-0 py-3 text-center">Status</th>
+                        <th class="pe-4 border-0 py-3 text-end">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if campaigns %}
+                        {% for c in campaigns %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="fw-bold text-dark">{{ c.campaign_name or c.name }}</span>
+                                <div class="text-muted extra-small">Type: {{ c.template_type|upper }}</div>
+                            </td>
+                            <td class="text-center">
+                                {% if c.status == 'completed' %}
+                                    <span class="badge bg-soft-success text-success px-3 rounded-pill">Completed</span>
+                                {% elif c.status == 'processing' %}
+                                    <span class="badge bg-soft-warning text-warning px-3 rounded-pill">Processing</span>
+                                {% else %}
+                                    <span class="badge bg-soft-info text-info px-3 rounded-pill">{{ c.status|capitalize }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="pe-4 text-end text-muted small">
+                                {{ c.created_at }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center py-5">
+                                <img src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" width="60" class="opacity-25 mb-3">
+                                <p class="text-muted">You haven't launched any campaigns yet.</p>
+                                <a href="/ui/campaigns/create" class="btn btn-sm btn-outline-primary">Launch First Campaign</a>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* User Dashboard Styling */
+    .bg-soft-success { background-color: #e8fadf; color: #28a745; }
+    .bg-soft-info { background-color: #e0f7fa; color: #00bcd4; }
+    .bg-soft-warning { background-color: #fff8e1; color: #ffc107; }
+
+    .stats-card {
+        transition: transform 0.2s;
+    }
+    .stats-card:hover {
+        transform: translateY(-3px);
+    }
+
+    .action-card {
+        border: 1px solid #f0f0f0;
+        transition: all 0.2s ease;
+    }
+    .action-card:hover {
+        background-color: #fcfcfc;
+        border-color: #0d6efd;
+        transform: scale(1.03);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05) !important;
+    }
+
+    .extra-small { font-size: 0.75rem; }
+    .avatar-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+{% endblock %}

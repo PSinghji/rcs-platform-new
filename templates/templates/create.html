@@ -1,0 +1,533 @@
+{% extends "layout/admin_base.html" %}
+{% block content %}
+
+<style>
+    :root { --rcs-blue: #1a73e8; --phone-border: #202124; }
+    .form-section { background: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; }
+    .sticky-preview { top: 2rem; position: sticky; }
+    .phone-mockup { width: 310px; height: 630px; background: var(--phone-border); border-radius: 40px; margin: 0 auto; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.15); border: 8px solid #2b2b2b; }
+    .phone-screen { position: absolute; top: 35px; bottom: 35px; left: 8px; right: 8px; background: #f8f9fa; border-radius: 4px; overflow-y: auto; display: flex; flex-direction: column; }
+    .chat-header { background: #fff; border-bottom: 1px solid #eee; }
+    .chat-body { flex: 1; overflow-y: auto; scrollbar-width: none; }
+    
+    /* Media Height Classes */
+    .media-SHORT { height: 80px !important; }
+    .media-MEDIUM { height: 140px !important; }
+    .media-TALL { height: 220px !important; }
+    
+    .rcs-media { width: 100%; object-fit: cover; background: #e8eaed; transition: height 0.3s; }
+    .rcs-title { font-size: 14px; font-weight: 600; color: #202124; margin-bottom: 4px; padding: 0 10px; }
+    .rcs-desc { font-size: 11px; color: #5f6368; line-height: 1.4; padding: 0 10px 10px 10px; }
+    .rcs-chip { background: white; border: 1px solid #dadce0; color: var(--rcs-blue); border-radius: 20px; padding: 6px 12px; font-size: 11px; text-align: center; margin: 2px 10px; }
+
+    /* Validation UI */
+    .is-invalid { border-color: #dc3545 !important; background-color: #fff8f8 !important; }
+    .char-counter { font-size: 10px; color: #6c757d; float: right; margin-top: 2px; }
+    .char-limit-exceeded { color: #dc3545 !important; font-weight: bold; }
+</style>
+
+<div class="container-fluid pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold text-dark">Create RCS Template</h4>
+        <a href="/ui/templates/list" class="btn btn-outline-secondary btn-sm rounded-pill">Back</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <form id="templateForm" class="form-section p-4 shadow-sm" novalidate>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">TEMPLATE NAME *</label>
+                        <input type="text" id="tpl_name" class="form-control" placeholder="Enter name..." oninput="this.classList.remove('is-invalid')">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold small text-muted">TEMPLATE TYPE *</label>
+                        <select id="templateType" class="form-select" onchange="toggleTypeBoxes(); this.classList.remove('is-invalid')">
+                            <option value="">-- Select --</option>
+                            <option value="plain">Text Only</option>
+                            <option value="rich">Rich Card (Standalone)</option>
+                            <option value="carousel">Carousel</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="plainBox" class="d-none mb-4 animate__animated animate__fadeIn">
+                    <label class="small fw-bold">Message Content *</label>
+                    <textarea id="plain_text" class="form-control mb-1" rows="4" maxlength="2000" placeholder="Enter message text..." oninput="handleTextInput(this, 2000)"></textarea>
+                    <div style="height: 15px;"> <span class="char-counter" id="plain_text_count">0/2000</span>
+                    </div>
+                    <div id="plainActions" class="mt-2"></div>
+                    <button type="button" id="btn_plainActions" class="btn btn-sm btn-outline-primary rounded-pill mt-2" onclick="addAction('plainActions')">+ Add Suggestion</button>
+                </div>
+
+                <div id="richBox" class="d-none mb-4 animate__animated animate__fadeIn">
+                    <div class="card bg-light p-3 mb-3 border-0">
+                        <div class="row g-2">
+                            <div class="col-8">
+                                <label class="small fw-bold">Media File *</label>
+                                <input type="file" class="form-control form-control-sm" onchange="handleUpload(this, 'rich_media_url', 'rich_status', false)">
+                                <input type="hidden" id="rich_media_url">
+                                <div id="rich_status" class="small mt-1 text-muted">Max 2MB (Img) / 10MB (Video)</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="small fw-bold">Height</label>
+                                <select id="rich_height" class="form-select form-select-sm" onchange="updateLivePreview()">
+                                    <option value="SHORT">Short</option>
+                                    <option value="MEDIUM" selected>Medium</option>
+                                    <option value="TALL">Tall</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <label class="small fw-bold">Title *</label>
+                    <input type="text" id="rich_title" class="form-control mb-1" maxlength="200" oninput="handleTextInput(this, 200)">
+                    <span class="char-counter mb-2" id="rich_title_count">0/200</span>
+                    
+                    <label class="small fw-bold">Description *</label>
+                    <textarea id="rich_desc" class="form-control mb-1" rows="3" maxlength="2000" oninput="handleTextInput(this, 2000)"></textarea>
+                    <div style="height: 15px;">
+                        <span class="char-counter" id="rich_desc_count">0/2000</span>
+                    </div>
+                    
+                    <div id="richActions" class="mt-2"></div>
+                    <button type="button" id="btn_richActions" class="btn btn-sm btn-outline-primary rounded-pill mt-2" onclick="addAction('richActions')">+ Add Action</button>
+                </div>
+
+                <div id="carouselBox" class="d-none mb-4 animate__animated animate__fadeIn">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="small fw-bold">Cards (2-10 required)</span>
+                        <select id="carousel_height" class="form-select form-select-sm w-auto" onchange="updateLivePreview()">
+                            <option value="SHORT">Short</option>
+                            <option value="MEDIUM" selected>Medium</option>
+                            <option value="TALL">Tall</option>
+                        </select>
+                    </div>
+                    <div id="carouselCards"></div>
+                    <button type="button" id="addCardBtn" class="btn btn-primary w-100 rounded-pill fw-bold" onclick="addCarouselCard()">+ Add Card (<span id="cardCount">0</span>/10)</button>
+                </div>
+
+                <hr class="my-5">
+                <button type="button" onclick="submitTemplate()" id="submitBtn" class="btn btn-success btn-lg w-100 fw-bold rounded-pill">SAVE TEMPLATE</button>
+            </form>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="sticky-preview">
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        <div class="chat-header p-2 border-bottom bg-white d-flex align-items-center">
+                            <div class="bg-primary rounded-circle me-2" style="width:24px;height:24px"></div>
+                            <span class="fw-bold small">Preview</span>
+                        </div>
+                        <div id="preview" class="chat-body p-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+const JIO_SUFFIX = '{% raw %}{{$50}}{% endraw %}';
+
+/**
+ * 1. RESOLUTION & SIZE CHECKER
+ */
+function checkResolution(file, expectedW, expectedH) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) return resolve(true);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                if (img.width !== expectedW || img.height !== expectedH) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Recommended Resolution',
+                        text: `Image is ${img.width}x${img.height}. Recommended is ${expectedW}x${expectedH}px.`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Use Anyway',
+                        cancelButtonText: 'Change'
+                    }).then(res => resolve(res.isConfirmed));
+                } else resolve(true);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleUpload(input, hiddenId, statusId, isCarousel) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // Size Validation
+    const sizeMB = file.size / (1024 * 1024);
+    if (file.type.startsWith('video/')) {
+        const limit = isCarousel ? 5 : 10;
+        if (sizeMB > limit) { Swal.fire('Error', `Video exceeds ${limit}MB limit`, 'error'); input.value=''; return; }
+    } else {
+        const limit = isCarousel ? 1 : 2;
+        if (sizeMB > limit) { Swal.fire('Error', `Image exceeds ${limit}MB limit`, 'error'); input.value=''; return; }
+    }
+
+    // Resolution Validation
+    const expW = isCarousel ? 960 : 1440;
+    const proceed = await checkResolution(file, expW, 720);
+    if (!proceed) { input.value = ''; return; }
+
+    const statusDiv = document.getElementById(statusId);
+    statusDiv.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading...';
+    
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const res = await fetch("/api/media/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        if (res.ok) {
+            if (isCarousel) statusDiv.dataset.url = data.fileUrl;
+            else document.getElementById(hiddenId).value = data.fileUrl;
+            statusDiv.innerHTML = '<span class="text-success small">Uploaded ✅</span>';
+            updateLivePreview();
+        } else { statusDiv.innerHTML = '<span class="text-danger small">Failed</span>'; }
+    } catch (err) { statusDiv.innerHTML = '<span class="text-danger small">Error</span>'; }
+}
+
+/**
+ * 2. TEXT COUNTER & INPUT
+ */
+function handleTextInput(el, limit) {
+    const counter = document.getElementById(el.id + '_count');
+    if (counter) {
+        const len = el.value.length;
+        counter.innerText = `${len}/${limit}`;
+        len > limit ? counter.classList.add('char-limit-exceeded') : counter.classList.remove('char-limit-exceeded');
+    }
+    el.classList.remove('is-invalid');
+    updateLivePreview();
+}
+
+/**
+ * 3. DYNAMIC ACTIONS LOGIC
+ */
+function refreshActionButtons(containerId) {
+    const box = document.getElementById(containerId);
+    const actions = box.querySelectorAll('.action-item');
+    const used = Array.from(actions).map(a => a.querySelector('.actType').value);
+    
+    actions.forEach(item => {
+        const select = item.querySelector('.actType');
+        Array.from(select.options).forEach(opt => {
+            opt.disabled = used.includes(opt.value) && opt.value !== select.value;
+        });
+    });
+    const addBtn = document.getElementById('btn_' + containerId);
+    if(addBtn) addBtn.disabled = actions.length >= 3;
+}
+
+function addAction(containerId) {
+    const box = document.getElementById(containerId);
+    if (box.querySelectorAll('.action-item').length >= 3) return;
+
+    const div = document.createElement("div");
+    div.className = "bg-light p-2 rounded mb-2 border action-item position-relative animate__animated animate__fadeIn";
+    div.innerHTML = `
+        <button type="button" class="btn-close position-absolute end-0 top-0 m-1" style="font-size:0.6rem" onclick="this.parentElement.remove(); refreshActionButtons('${containerId}'); updateLivePreview();"></button>
+        <div class="row g-2">
+            <div class="col-4">
+                <select class="form-select form-select-sm actType" onchange="refreshActionButtons('${containerId}'); updateLivePreview()">
+                    <option value="openUrl">URL</option>
+                    <option value="dialerAction">Call</option>
+                    <option value="reply">Reply</option>
+                </select>
+            </div>
+            <div class="col-4"><input class="form-control form-control-sm actText" placeholder="Label" oninput="updateLivePreview()"></div>
+            <div class="col-4"><input class="form-control form-control-sm actVal" placeholder="Value" oninput="updateLivePreview()"></div>
+        </div>`;
+    box.appendChild(div);
+    refreshActionButtons(containerId);
+}
+
+/**
+ * 4. CAROUSEL LOGIC
+ */
+function addCarouselCard() {
+    const container = document.getElementById("carouselCards");
+    const count = container.querySelectorAll(".carousel-card").length;
+    if (count >= 10) return;
+
+    const id = "ca_" + Date.now();
+    const div = document.createElement("div");
+    div.className = "card mb-3 carousel-card border-2 shadow-sm";
+    div.innerHTML = `
+        <div class="card-header p-2 bg-light d-flex justify-content-between">
+            <small class="fw-bold">Card #${count+1}</small>
+            <button type="button" class="btn btn-sm text-danger p-0" onclick="this.closest('.card').remove(); updateCardCount(); updateLivePreview();"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="card-body p-2">
+            <div class="row g-2 mb-2">
+                <div class="col-8">
+                    <input class="form-control form-control-sm ct" id="${id}_t" placeholder="Title (Max 200)" oninput="handleTextInput(this, 200)">
+                    <span class="char-counter" id="${id}_t_count">0/200</span>
+                </div>
+                <div class="col-4">
+                    <input type="file" class="d-none" id="file_${id}" onchange="handleUpload(this, null, '${id}_st', true)">
+                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="document.getElementById('file_${id}').click()">Media</button>
+                </div>
+            </div>
+            <textarea class="form-control form-control-sm mb-1 cd" id="${id}_d" placeholder="Description (Max 2000)" oninput="handleTextInput(this, 2000)"></textarea>
+            <span class="char-counter mb-2" id="${id}_d_count">0/2000</span>
+            <div id="${id}_st" class="small text-center media-status text-muted" data-url="">Max 1MB (Img) / 5MB (Video)</div>
+            <div id="${id}_actions"></div>
+            <button type="button" class="btn btn-xs btn-link p-0 mt-1" id="btn_${id}_actions" onclick="addAction('${id}_actions')">+ Action</button>
+        </div>`;
+    container.appendChild(div);
+    updateCardCount();
+}
+
+function updateCardCount() {
+    document.getElementById("cardCount").innerText = document.querySelectorAll(".carousel-card").length;
+}
+
+/**
+ * 5. PREVIEW & TOGGLE
+ */
+function toggleTypeBoxes() {
+    const t = document.getElementById("templateType").value;
+    document.getElementById("plainBox").classList.toggle("d-none", t !== 'plain');
+    document.getElementById("richBox").classList.toggle("d-none", t !== 'rich');
+    document.getElementById("carouselBox").classList.toggle("d-none", t !== 'carousel');
+    updateLivePreview();
+}
+
+function renderMedia(url, heightClass) {
+    const h = "media-" + (heightClass || "MEDIUM");
+    if (!url) return `<div class="rcs-media ${h}"></div>`;
+    if (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.webm')) {
+        return `<video class="rcs-media ${h}" autoplay muted loop playsinline><source src="${url}"></video>`;
+    }
+    return `<img src="${url}" class="rcs-media ${h}">`;
+}
+
+function renderButtons(containerId) {
+    const box = document.getElementById(containerId);
+    if (!box) return "";
+    let html = '<div class="rcs-btn-container px-1 pb-1">';
+    box.querySelectorAll('.action-item').forEach(item => {
+        const label = item.querySelector('.actText').value;
+        html += `<div class="rcs-chip">${label || 'Button'}</div>`;
+    });
+    return html + '</div>';
+}
+
+function updateLivePreview() {
+    const type = document.getElementById("templateType").value;
+    const box = document.getElementById("preview");
+    if (!type) { box.innerHTML = ""; return; }
+
+    let html = "";
+    if (type === "plain") {
+        html = `<div class="bg-white p-3 rounded shadow-sm mb-2" style="border-radius:18px 18px 18px 4px;">${document.getElementById("plain_text").value || "Message..."}</div>`;
+        html += renderButtons("plainActions");
+    } else if (type === "rich") {
+        const h = document.getElementById("rich_height").value;
+        html = `<div class="rcs-card shadow-sm">
+            ${renderMedia(document.getElementById("rich_media_url").value, h)}
+            <div class="p-2">
+                <div class="rcs-title">${document.getElementById("rich_title").value || "Title"}</div>
+                <div class="rcs-desc">${document.getElementById("rich_desc").value || "Description"}</div>
+            </div>
+        </div>${renderButtons("richActions")}`;
+    } else if (type === "carousel") {
+        const h = document.getElementById("carousel_height").value;
+        html = `<div class="d-flex overflow-auto gap-2 p-1">`;
+        document.querySelectorAll(".carousel-card").forEach(card => {
+            const url = card.querySelector(".media-status").dataset.url;
+            html += `<div class="rcs-card shadow-sm" style="min-width:200px">
+                ${renderMedia(url, h)}
+                <div class="p-2">
+                    <div class="rcs-title text-truncate">${card.querySelector(".ct").value || "Title"}</div>
+                    <div class="rcs-desc text-truncate">${card.querySelector(".cd").value || "Desc"}</div>
+                </div>
+                ${renderButtons(card.querySelector("[id$='_actions']").id)}
+            </div>`;
+        });
+        html += `</div>`;
+    }
+    box.innerHTML = html;
+}
+
+/**
+ * 6. SUBMIT VALIDATION
+ */
+async function validateForm() {
+    const name = document.getElementById("tpl_name");
+    const type = document.getElementById("templateType");
+    
+    // Clear previous errors
+    document.querySelectorAll(".is-invalid").forEach(el => el.classList.remove("is-invalid"));
+
+    if (!name.value.trim()) return showError(name, "Template Name is required");
+    if (!type.value) return showError(type, "Template Type is required");
+
+    if (type.value === "plain") {
+        const txt = document.getElementById("plain_text");
+        if (!txt.value.trim()) return showError(txt, "Message content is required");
+        if (!validateActionsInBox("plainActions")) return false;
+    } 
+    else if (type.value === "rich") {
+        const media = document.getElementById("rich_media_url");
+        const title = document.getElementById("rich_title");
+        const desc = document.getElementById("rich_desc");
+
+        if (!media.value) return showError(null, "Media upload is mandatory");
+        if (!title.value.trim()) return showError(title, "Title is mandatory");
+        if (!desc.value.trim()) return showError(desc, "Description is mandatory");
+        if (!validateActionsInBox("richActions")) return false;
+    } 
+    else if (type.value === "carousel") {
+        const cards = document.querySelectorAll(".carousel-card");
+        if (cards.length < 2) return showError(null, "At least 2 cards are required");
+        for (let [i, card] of cards.entries()) {
+            const ct = card.querySelector(".ct");
+            const cd = card.querySelector(".cd");
+            const url = card.querySelector(".media-status").dataset.url;
+            if (!url) return showError(null, `Media missing in Card #${i+1}`);
+            if (!ct.value.trim()) return showError(ct, `Title missing in Card #${i+1}`);
+            if (!cd.value.trim()) return showError(cd, `Description missing in Card #${i+1}`);
+            if (!validateActionsInBox(card.querySelector("[id$='_actions']").id)) return false;
+        }
+    }
+    return true;
+}
+
+function validateActionsInBox(containerId) {
+    const actions = document.getElementById(containerId).querySelectorAll('.action-item');
+    for (let action of actions) {
+        const type = action.querySelector('.actType').value;
+        const text = action.querySelector('.actText');
+        const val = action.querySelector('.actVal');
+
+        if (!text.value.trim()) return showError(text, "Button label is required");
+        if (!val.value.trim()) return showError(val, "Action value is required");
+
+        if (type === 'openUrl') {
+            // Strict check for http:// or https://
+            if (!val.value.trim().startsWith('http://') && !val.value.trim().startsWith('https://')) {
+                return showError(val, "URL must start with http:// or https://");
+            }
+        }
+    }
+    return true;
+}
+
+function showError(el, msg) {
+    if (el) { el.classList.add("is-invalid"); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    Swal.fire("Validation Error", msg, "error");
+    return false;
+}
+
+function buildPayload() {
+    const type = document.getElementById("templateType").value;
+    const content = {};
+    
+    // Helper to get array of button objects
+    const getButtons = (id) => {
+        return Array.from(document.getElementById(id).querySelectorAll('.action-item')).map(item => {
+            const t = item.querySelector('.actType').value;
+            const l = item.querySelector('.actText').value;
+            const v = item.querySelector('.actVal').value;
+            const pb = (v || l) + JIO_SUFFIX;
+            
+            if(t === 'reply') return { reply: { plainText: l, postBack: { data: pb } } };
+            const action = { plainText: l, postBack: { data: pb } };
+            if(t === 'openUrl') action.openUrl = { url: v };
+            if(t === 'dialerAction') action.dialerAction = { phoneNumber: v };
+            return { action };
+        });
+    };
+
+    if (type === 'plain') {
+        content.plainText = document.getElementById("plain_text").value;
+        // CORRECTED: Only add key if buttons exist
+        const btns = getButtons("plainActions");
+        if (btns.length > 0) content.suggestions = btns;
+    } 
+    else if (type === 'rich') {
+        const cardContent = {
+            cardTitle: document.getElementById("rich_title").value,
+            cardDescription: document.getElementById("rich_desc").value,
+            cardMedia: { 
+                mediaHeight: document.getElementById("rich_height").value, 
+                contentInfo: { fileUrl: document.getElementById("rich_media_url").value } 
+            }
+        };
+        // CORRECTED: Only add key if buttons exist
+        const btns = getButtons("richActions");
+        if (btns.length > 0) cardContent.suggestions = btns;
+
+        content.richCardDetails = { 
+            standalone: { 
+                cardOrientation: "VERTICAL", 
+                content: cardContent
+            }
+        };
+    } 
+    else if (type === 'carousel') {
+        const cards = Array.from(document.querySelectorAll(".carousel-card")).map(c => {
+            const cardObj = {
+                cardTitle: c.querySelector(".ct").value,
+                cardDescription: c.querySelector(".cd").value,
+                cardMedia: { 
+                    mediaHeight: document.getElementById("carousel_height").value, 
+                    contentInfo: { fileUrl: c.querySelector(".media-status").dataset.url } 
+                }
+            };
+            // CORRECTED: Check specific card's buttons
+            const btns = getButtons(c.querySelector("[id$='_actions']").id);
+            if (btns.length > 0) cardObj.suggestions = btns;
+            
+            return cardObj;
+        });
+        content.richCardDetails = { carousel: { cardWidth: "MEDIUM_WIDTH", contents: cards } };
+    }
+    return content;
+}
+
+async function submitTemplate() {
+    const isValid = await validateForm();
+    if (!isValid) return;
+
+    const btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.innerHTML = 'Saving...';
+
+    const payload = {
+        name: document.getElementById("tpl_name").value,
+        template_type: document.getElementById("templateType").value,
+        content: buildPayload()
+    };
+
+    try {
+        const res = await fetch("/ui/templates/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            Swal.fire('Success', 'Template Created!', 'success').then(() => window.location.href = "/ui/templates/list");
+        } else {
+            const err = await res.json();
+            Swal.fire('Error', err.detail || 'Failed to save', 'error');
+            btn.disabled = false; btn.innerHTML = 'SAVE TEMPLATE';
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error', 'error');
+        btn.disabled = false; btn.innerHTML = 'SAVE TEMPLATE';
+    }
+}
+</script>
+{% endblock %}
