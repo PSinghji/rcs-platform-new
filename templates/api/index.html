@@ -5,7 +5,7 @@
   <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
       <h3 class="fw-bold mb-1">API Integration</h3>
-      <p class="text-muted mb-0">The minimum API flow to create a template, send a campaign, and download its report.</p>
+      <p class="text-muted mb-0">Create simple or dynamic templates, send campaigns by JSON or file upload, and download delivery reports.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a href="/ui/api/documentation/download" class="btn btn-primary rounded-pill px-3">
@@ -27,7 +27,7 @@
         <li>Send your username and password to <code>POST /api/v1/auth/token</code>.</li>
         <li>Store the returned access token securely.</li>
         <li>Create a template, check its approval status, then list approved templates to obtain a valid <code>template_id</code>.</li>
-        <li>Upload the campaign numbers, monitor campaign status, and download the report.</li>
+        <li>Create a campaign with JSON parameters or upload a CSV/XLSX audience, then monitor status and download the report.</li>
       </ol>
       <pre class="bg-dark text-light rounded-3 p-3 mb-0"><code>curl -X POST "{{ request.base_url }}api/v1/auth/token" \
   -H "Content-Type: application/json" \
@@ -45,6 +45,7 @@
       ('GET', '/api/v1/templates/approved', 'List approved templates and copy the required template_id.')
     ]),
     ('Campaigns and reports', [
+      ('POST', '/api/v1/campaigns', 'Create a simple or dynamic campaign directly from JSON without a CSV file.'),
       ('POST', '/api/v1/campaigns/upload', 'Create a large campaign from a CSV, TXT, or XLSX file.'),
       ('GET', '/api/v1/campaigns/{campaign_id}/status', 'Monitor campaign progress and delivery totals.'),
       ('GET', '/api/v1/campaigns/{campaign_id}/report', 'Download the authorized campaign report as CSV.')
@@ -73,11 +74,80 @@
   </div>
   {% endfor %}
 
+  <div class="card mb-4">
+    <div class="card-header bg-white py-3"><h5 class="fw-bold mb-0">Simple and dynamic JSON examples</h5></div>
+    <div class="card-body p-4">
+      <h6 class="fw-bold">Create a simple template</h6>
+      <pre class="bg-dark text-light rounded-3 p-3"><code>curl -X POST "{{ request.base_url }}api/v1/templates" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Simple Service Update",
+    "template_type": "plain",
+    "content": {"plainText": "Your service request has been completed."}
+  }'</code></pre>
+
+      <h6 class="fw-bold mt-4">Create a dynamic template</h6>
+      <p class="text-muted">Use placeholders in any string field. The API automatically detects and stores the variable names.</p>
+      <pre class="bg-dark text-light rounded-3 p-3"><code>curl -X POST "{{ request.base_url }}api/v1/templates" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Dynamic Coupon Offer",
+    "template_type": "plain",
+    "content": {
+      "plainText": "Hello {% raw %}{{name}}{% endraw %}, use {% raw %}{{coupon_code}}{% endraw %} before {% raw %}{{expiry_date}}{% endraw %}."
+    }
+  }'</code></pre>
+
+      <h6 class="fw-bold mt-4">Send a simple JSON campaign</h6>
+      <pre class="bg-dark text-light rounded-3 p-3"><code>curl -X POST "{{ request.base_url }}api/v1/campaigns" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campaign_name": "Simple November Campaign",
+    "template_id": "APPROVED_TEMPLATE_ID",
+    "numbers": ["9876543210", "+919123456789"]
+  }'</code></pre>
+
+      <h6 class="fw-bold mt-4">Send a dynamic JSON campaign without CSV</h6>
+      <p class="text-muted">Each recipient supplies a <code>variables</code> object. Its keys must match the approved template placeholders exactly.</p>
+      <pre class="bg-dark text-light rounded-3 p-3 mb-0"><code>curl -X POST "{{ request.base_url }}api/v1/campaigns" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: campaign-request-20261112-001" \
+  -d '{
+    "campaign_name": "Personalized November Campaign",
+    "template_id": "APPROVED_DYNAMIC_TEMPLATE_ID",
+    "recipients": [
+      {
+        "mobile": "9876543210",
+        "variables": {
+          "name": "Asha",
+          "coupon_code": "SAVE20",
+          "expiry_date": "30 November 2026"
+        }
+      },
+      {
+        "mobile": "+919123456789",
+        "variables": {
+          "name": "Ravi",
+          "coupon_code": "SAVE10",
+          "expiry_date": "30 November 2026"
+        }
+      }
+    ]
+  }'</code></pre>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-body p-4">
       <h5 class="fw-bold">Campaign creation requirements</h5>
       <ul class="mb-0">
         <li>Call <code>GET /api/v1/templates/approved</code> and use the required template <code>id</code> as <code>template_id</code>.</li>
+        <li>For JSON campaigns, use <code>numbers</code> for simple messages or <code>recipients[].variables</code> for per-recipient dynamic values. No CSV file is required.</li>
+        <li>Dynamic variable keys must match template placeholders. Missing values are rejected before campaign submission.</li>
         <li>The server automatically generates an idempotency key for campaign creation. Supplying an optional <code>Idempotency-Key</code> is supported when your integration needs to retry the same request safely.</li>
         <li>CSV, TXT, or XLSX upload supports up to 500,000 unique valid Indian mobile numbers and a 20 MB file. XLSX files must contain a <code>Mobile</code> column in the first worksheet.</li>
         <li>Users can monitor and download only their own campaigns. Administrators can access any campaign by ID.</li>

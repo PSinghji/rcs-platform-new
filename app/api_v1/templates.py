@@ -22,11 +22,20 @@ class TemplateCreateRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "name": "October Offer",
-                "template_type": "plain",
-                "content": {"text": "Your offer message"},
-            }
+            "examples": [
+                {
+                    "name": "Simple Service Update",
+                    "template_type": "plain",
+                    "content": {"plainText": "Your service request has been completed."},
+                },
+                {
+                    "name": "Dynamic Coupon Offer",
+                    "template_type": "plain",
+                    "content": {
+                        "plainText": "Hello {{name}}, use coupon {{coupon_code}} before {{expiry_date}}."
+                    },
+                },
+            ]
         }
     )
 
@@ -64,7 +73,12 @@ def _owner_query(user: dict):
     "",
     status_code=201,
     summary="Create Template",
-    description="Create a template. Non-admin templates remain pending until an administrator approves them.",
+    description=(
+        "Create either a simple or dynamic RCS template. Simple templates contain ordinary content. Dynamic "
+        "templates contain placeholders such as {{name}} or {{coupon_code}} in any string field, including rich-card "
+        "titles, descriptions, URLs, and action values. Placeholder names are detected automatically and returned "
+        "as variables. Non-admin templates remain pending until an administrator approves them."
+    ),
     responses={
         201: {
             "description": "Template created",

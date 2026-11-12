@@ -6,12 +6,13 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from io import StringIO
+from typing import Any
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pymongo.errors import DuplicateKeyError
 
 from app.api_v1.dependencies import get_api_user, get_owned_campaign
@@ -27,11 +28,57 @@ MAX_UPLOAD_NUMBERS = 500000
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
+class CampaignRecipient(BaseModel):
+    mobile: str = Field(description="Indian mobile number, with or without the +91 country code")
+    variables: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Template variable values for this recipient. Keys must match placeholders in the approved "
+            "template, for example name for {{name}} and coupon_code for {{coupon_code}}."
+        ),
+    )
+
+
 class CampaignCreateRequest(BaseModel):
-    campaign_name: str
-    template_id: str
-    numbers: list[str] = Field(default_factory=list)
-    recipients: list[dict] = Field(default_factory=list)
+    campaign_name: str = Field(description="Unique campaign display name")
+    template_id: str = Field(description="Approved template ID returned by GET /api/v1/templates/approved")
+    numbers: list[str] = Field(
+        default_factory=list,
+        description="Legacy/simple campaign mobile-number list. Existing integrations can continue using this field.",
+    )
+    recipients: list[CampaignRecipient] = Field(
+        default_factory=list,
+        description=(
+            "Recipients with per-recipient variable values. Use this for dynamic campaigns without uploading a file. "
+            "When recipients is supplied, it takes precedence over numbers."
+        ),
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "campaign_name": "Simple November Campaign",
+                    "template_id": "64f1234567890abcdef12345",
+                    "numbers": ["9876543210", "+919123456789"],
+                },
+                {
+                    "campaign_name": "Personalized November Campaign",
+                    "template_id": "64f1234567890abcdef12345",
+                    "recipients": [
+                        {
+                            "mobile": "9876543210",
+                            "variables": {"name": "Asha", "coupon_code": "SAVE20"},
+                        },
+                        {
+                            "mobile": "+919123456789",
+                            "variables": {"name": "Ravi", "coupon_code": "SAVE10"},
+                        },
+                    ],
+                },
+            ]
+        }
+    )
 
 
 def _serialize_campaign(campaign: dict):
@@ -216,7 +263,25 @@ async def _create_campaign(
         raise
 
 
-@router.post("", status_code=202, include_in_schema=False)
+@router.post(
+    "",
+    status_code=202,
+    summary="Create Simple or Dynamic Campaign From JSON",
+    description=(
+        "Create a campaign without a CSV/XLSX upload. Existing simple integrations may send numbers. "
+        "Dynamic integrations send recipients, where each item contains a mobile number and a variables object. "
+        "Every variable key must match a {{placeholder}} in the approved template. The optional Idempotency-Key "
+        "header makes retries safe; the server generates one when omitted."
+    ),
+    responses={
+        202: {"description": "Campaign accepted for background processing"},
+        400: {"description": "Invalid recipient, template, provider, or missing dynamic value"},
+        401: {"description": "Bearer token missing, invalid, or expired"},
+        402: {"description": "Insufficient wallet balance"},
+        409: {"description": "Campaign name or idempotency-key conflict"},
+        413: {"description": "JSON recipient limit exceeded"},
+    },
+)
 async def create_campaign_json(
     data: CampaignCreateRequest,
     idempotency_key: str | None = Header(
@@ -226,7 +291,7 @@ async def create_campaign_json(
     ),
     user=Depends(get_api_user),
 ):
-    raw_recipients = data.recipients or [
+    raw_recipients = [recipient.model_dump() for recipient in data.recipients] or [
         {"mobile": number, "variables": {}} for number in data.numbers
     ]
     if len(raw_recipients) > MAX_JSON_NUMBERS:
@@ -318,7 +383,7 @@ def get_campaign(campaign_id: str, user=Depends(get_api_user)):
     description="Return the current processing and delivery totals for an authorized campaign.",
 )
 def get_campaign_status(
-    campaign_id: str = Path(..., description="Campaign id returned by POST /api/v1/campaigns/upload"),
+    campaign_id: str = Path(..., description="Campaign id returned by either campaign-creation endpoint"),
     user=Depends(get_api_user),
 ):
     campaign = get_owned_campaign(campaign_id, user)
@@ -332,7 +397,7 @@ def get_campaign_status(
     responses={200: {"description": "CSV report file"}},
 )
 def download_campaign_report(
-    campaign_id: str = Path(..., description="Campaign id returned by POST /api/v1/campaigns/upload"),
+    campaign_id: str = Path(..., description="Campaign id returned by either campaign-creation endpoint"),
     status: str = Query(default=None, description="Optional message status filter, for example delivered, failed, or read"),
     user=Depends(get_api_user),
 ):
