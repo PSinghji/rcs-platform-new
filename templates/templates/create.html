@@ -513,9 +513,9 @@ async function submitTemplate() {
     };
 
     const serialized = JSON.stringify(payload.content);
-    // Button postback data gets a Jio-required {{$50}} marker appended by
-    // buildPayload(). It is provider syntax, not a user variable, so exclude
-    // that generated marker when checking user-authored placeholders.
+    // Button postback data gets a Jio-required suffix appended by buildPayload.
+    // It is provider syntax, not a user variable, so exclude that generated
+    // marker when checking user-authored placeholders.
     const contentForVariableCheck = serialized.split(JIO_SUFFIX).join('');
     const malformed = contentForVariableCheck.match(/\{\{(?!\s*[A-Za-z][A-Za-z0-9_]*\s*\}\})/);
     if (malformed) {
